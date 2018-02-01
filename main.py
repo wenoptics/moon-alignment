@@ -8,10 +8,11 @@ test_img = [
     'test_dataset/DSC01422.jpg',
     'test_dataset/DSC01426.jpg',
 ]
+test_img = open('test_dataset/test_datasets.txt', encoding='utf-8').read().split()
 
 for img_path in test_img:
     ori_img = cv2.imread(img_path)
-    img = cv2.resize(ori_img, (0, 0), fx=0.01, fy=0.01)
+    img = cv2.resize(ori_img, (0, 0), fx=0.2, fy=0.2)
 
     circles = find_circle(img, show_debug_preview=False)
     if not circles:
@@ -26,7 +27,7 @@ for img_path in test_img:
         cv2.circle(img, (i.x, i.y), 5, (0, 0, 255), 1)
 
     cv2.imshow('moondetect - {}'.format(img_path), img)
-    cv2.imwrite('img/moondetect_preview.jpg'.format(img_path), img)
+    # cv2.imwrite('img/moondetect_preview.jpg'.format(img_path), img)
 
 cv2.waitKey()
 cv2.destroyAllWindows()
