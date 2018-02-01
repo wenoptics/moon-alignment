@@ -1,9 +1,5 @@
-from time import time
-
 import cv2
 import numpy as np
-
-from utils.util import myTuneWindow
 
 
 class Circle():
@@ -12,15 +8,17 @@ class Circle():
         self.y = y
         self.x = x
 
+
 # Normalize image
-dst_width = 1472
+DST_WIDTH = 1472
+
 
 def scale_to_normal(img):
     h, w, _ = img.shape
-    if w < dst_width:
-        print('[W] input image has size(w={}) smaller than normailize size(w={})'.format(w, dst_width))
+    if w < DST_WIDTH:
+        print('[W] input image has size(w={}) smaller than normailize size(w={})'.format(w, DST_WIDTH))
 
-    factor = dst_width / w
+    factor = DST_WIDTH / w
     return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
 
 
@@ -94,28 +92,3 @@ def find_circle(img,
     # cv2.imwrite("1.jpg", img)
     if show_debug_preview: cv2.imshow(target_windowsname, img)
     return ret
-
-
-def loadimg():
-    ori_img = cv2.imread(
-        'test_dataset/DSC01313.jpg'
-        # 'test_dataset/DSC01332.jpg'
-        # 'test_dataset/DSC01422.jpg'
-        # 'test_dataset/DSC01426.jpg'
-    )
-    # ori_img = cv2.resize(ori_img, (0, 0), fx=0.2, fy=0.2)
-    print('origin img.shape={}'.format(ori_img.shape))
-
-    myTuneWindow(find_circle, ori_img,
-                 valMedianBlur=(1, 30, 2),
-                 valKernelOpen=(1, 100, 2),
-                 valKernelClose=(1, 100, 2),
-                 valAdaptivateThreshold=(1, 255),
-                 valHoughParam1=(1, 300),
-                 valHoughParam2=(1, 300),
-                 valHoughMinDist=(1, 1000),
-                 )
-
-
-if __name__ == '__main__':
-    loadimg()

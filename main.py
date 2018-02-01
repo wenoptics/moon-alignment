@@ -1,6 +1,6 @@
 import cv2
 
-from tryFindCircle import find_circle
+from findcircle import find_circle
 
 test_img = [
     'test_dataset/DSC01313.jpg',
@@ -11,7 +11,7 @@ test_img = [
 
 for img_path in test_img:
     ori_img = cv2.imread(img_path)
-    img = cv2.resize(ori_img, (0, 0), fx=0.05, fy=0.05)
+    img = cv2.resize(ori_img, (0, 0), fx=0.01, fy=0.01)
 
     circles = find_circle(img, show_debug_preview=False)
     if not circles:
