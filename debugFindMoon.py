@@ -25,13 +25,16 @@ def loadimg():
     print('origin img.shape={}'.format(ori_img.shape))
     roi, x, y = find_main_object(ori_img, show_debug_preview=False)
     myTuneWindow(find_circle, roi,
-                 valMedianBlur=(1, 30, 2),
+                 # valMedianBlur=(1, 30, 2),
                  valKernelOpen=(1, 100, 2),
                  valKernelClose=(1, 100, 2),
                  valHoughParam1=(1, 300),
                  valHoughParam2=(1, 300),
                  valHoughMinDist=(1, 1000),
-                 valAdaptiveThreshold=(0,255),
+                 # valAdaptiveThreshold=(0,255),
+                 valBlfColor=(0, 1250),
+                 valBlfSpace=(0, 1250),
+                 valBlfD=(0, 30),
                  )
 
 

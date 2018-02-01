@@ -45,13 +45,29 @@ def adp_thresh_bin(gray, thr=250):
     return thrs
 
 
+def auto_canny(image, sigma=0.33):
+    # compute the median of the single channel pixel intensities
+    v = np.median(image)
+
+    # apply automatic Canny edge detection using the computed median
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+
+    # return the edged image
+    return edged
+
+
 def find_circle(img,
                 valMedianBlur=19,
                 valKernelOpen=5,
                 valKernelClose=7,
-                valHoughParam1=172,
+                valHoughParam1=241,
                 valHoughParam2=6,
                 valHoughMinDist=900,
+                valBlfD=15,
+                valBlfColor=750,
+                valBlfSpace=750,
                 valAdaptiveThreshold=107,
                 show_debug_preview=True
                 ):
@@ -62,6 +78,12 @@ def find_circle(img,
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # gray_img = adp_thresh_grayscale(gray_img, valAdaptivateThreshold)
+
+    gray_img = cv2.bilateralFilter(gray_img, valBlfD, valBlfColor, valBlfSpace)
+    if show_debug_preview: cv2.imshow('find_circle.bilateralFilter', gray_img)
+
+    # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold)
+    # if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
 
     # MORPH_OPEN is erosion followed by dilation,
     #   eliminate noise outside the target
@@ -74,11 +96,13 @@ def find_circle(img,
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_CLOSE, mclose_kernel)
     if show_debug_preview: cv2.imshow('find_circle.MORPH_CLOSE', gray_img)
 
-    pimg = cv2.medianBlur(gray_img, valMedianBlur)
-    if show_debug_preview: cv2.imshow('find_circle.medianBlur', pimg)
-    # pimg = cv2.cvtColor(pimg, cv2.COLOR_GRAY2BGR)
+    gray_img = cv2.addWeighted(gray_img, 0.05, cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1, 0)
+    if show_debug_preview: cv2.imshow('find_circle.addWeighted', gray_img)
 
-    circles = cv2.HoughCircles(pimg.copy(), cv2.HOUGH_GRADIENT, 1, valHoughMinDist,
+    # gray_img = auto_canny(gray_img)
+    # if show_debug_preview: cv2.imshow('find_circle.auto_canny', gray_img)
+
+    circles = cv2.HoughCircles(gray_img.copy(), cv2.HOUGH_GRADIENT, 1, valHoughMinDist,
                                param1=valHoughParam1, param2=valHoughParam2, minRadius=0, maxRadius=0)
     if circles is None:
         print('circles={}, skip.'.format(circles))
@@ -86,13 +110,13 @@ def find_circle(img,
         return
 
     # --------------- Try using contour fit ----------------
-    gray_img = adp_thresh_bin(pimg, valAdaptiveThreshold)
-    if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
-
-    largest_contour = find_largest_contour(gray_img)
-    ellipse = cv2.fitEllipse(largest_contour)
-    img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
-    if show_debug_preview: cv2.imshow('fitEllipse', img_ellipse)
+    # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold)
+    # if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
+    #
+    # largest_contour = find_largest_contour(gray_img)
+    # ellipse = cv2.fitEllipse(largest_contour)
+    # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
+    # if show_debug_preview: cv2.imshow('fitEllipse', img_ellipse)
 
     ret = []
     draw_circles = np.uint16(np.around(circles))
