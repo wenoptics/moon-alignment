@@ -10,7 +10,23 @@ from utils.util import myTuneWindow
 logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
 
 
-def loadimg():
+def tune_find_circle(img):
+    myTuneWindow(find_circle, img,
+                 # valMedianBlur=(1, 30, 2),
+                 valKernelOpen=(1, 100, 2),
+                 valKernelClose=(1, 100, 2),
+                 valHoughParam1=(1, 300),
+                 valHoughParam2=(1, 300),
+                 valHoughMinDist=(1, 1000),
+                 valAdaptiveThreshold=(0,255),
+                 valBlfColor=(0, 1250),
+                 valBlfSpace=(0, 1250),
+                 valBlfD=(0, 30),
+                 )
+
+
+if __name__ == '__main__':
+
     ori_img = cv2.imread(
         # 'test_dataset/DSC01313.jpg'
         # 'test_dataset/DSC01332.jpg'
@@ -29,19 +45,4 @@ def loadimg():
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.1, fy=0.1)
     print('origin img.shape={}'.format(ori_img.shape))
     roi, x, y = find_main_object(ori_img, show_debug_preview=False)
-    myTuneWindow(find_circle, roi,
-                 # valMedianBlur=(1, 30, 2),
-                 valKernelOpen=(1, 100, 2),
-                 valKernelClose=(1, 100, 2),
-                 valHoughParam1=(1, 300),
-                 valHoughParam2=(1, 300),
-                 valHoughMinDist=(1, 1000),
-                 valAdaptiveThreshold=(0,255),
-                 valBlfColor=(0, 1250),
-                 valBlfSpace=(0, 1250),
-                 valBlfD=(0, 30),
-                 )
-
-
-if __name__ == '__main__':
-    loadimg()
+    tune_find_circle(roi)

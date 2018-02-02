@@ -51,17 +51,20 @@ for img_path in images:
 
         crop_img = img[moon.y-padding_top:moon.y+padding_bottom, moon.x-padding_left:moon.x+padding_right]
 
-        logger.info('press "y" or "n" to save or skip crop image.')
-
-        retkey = cv2.waitKey()
-        if 'y' == chr(retkey & 255):
-            saved_path = os.path.join(save_cropped_folder, os.path.basename(img_path))
-            cv2.imwrite(saved_path, crop_img)
-            logger.info('cropped image saved to {}'.format(saved_path))
-        elif 'n' == chr(retkey & 255):
-            logger.info('image "{}" will not crop'.format(img_path))
-        else:
-            logger.info('press "y" or "n"')
+        while True:
+            logger.info('press "y" or "n" to save or skip crop image.')
+            retkey = cv2.waitKey()
+            if 'y' == chr(retkey & 255):
+                saved_path = os.path.join(save_cropped_folder, os.path.basename(img_path))
+                cv2.imwrite(saved_path, crop_img)
+                logger.info('cropped image saved to {}'.format(saved_path))
+                break
+            elif 'n' == chr(retkey & 255):
+                logger.info('image "{}" will not crop'.format(img_path))
+                break
+            elif 'd' == chr(retkey & 255):
+                logger.info('manually tune for image "{}" started'.format(img_path))
+                # todo
 
         cv2.destroyAllWindows()
 

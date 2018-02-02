@@ -214,6 +214,8 @@ def find_black_drop(img, remaining_percentage=0.5) -> int:
     hist = hist/s
     dhist = diff(hist)
 
+    # print(hist)
+
     main_drop = min(dhist)
     remaining_thr = main_drop * remaining_percentage
     for i in range(dhist.index(main_drop), len(dhist)):
