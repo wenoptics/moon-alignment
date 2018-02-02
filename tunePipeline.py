@@ -31,3 +31,10 @@ def tune_find_moon(img_path):
     ret_circle.y += ry
 
     return ret_circle
+
+
+if __name__ == '__main__':
+    tune_find_moon(
+        # "E:/tmp/Eclipse-20180131/D810/jpg/DSC_3363.jpg"
+        "E:/tmp/Eclipse-20180131/D810/jpg/DSC_3357.jpg"
+    )
