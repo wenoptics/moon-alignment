@@ -1,5 +1,9 @@
+import logging
+
 import cv2
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class Circle():
@@ -10,7 +14,7 @@ class Circle():
 
 
 # Normalize image
-DST_WIDTH = 500
+NORM_WIDTH = 500
 
 
 def resize(img, dst_width):
@@ -27,12 +31,13 @@ def resize_bin(img, dst_width):
 
 def scale_to_normal(img):
     h, w, _ = img.shape
-    if w < DST_WIDTH:
-        print('[W] input image has size(w={}) smaller than normailize size(w={})'.format(w, DST_WIDTH))
+    if w < NORM_WIDTH:
+        logger.warning('input image has size(w={}) smaller than normailize size(w={})'.format(w, NORM_WIDTH))
 
-    factor = DST_WIDTH / w
+    factor = NORM_WIDTH / w
     if factor < 0.5:
-        print('[W] The ratio is too small ({}), may not produce the correct detection. (is the moon too small?)'.format(factor))
+        logger.warning('The ratio is too small (%.2f), may not produce the correct detection. (is the moon too small?)',
+                       factor)
     return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
 
 
@@ -60,15 +65,15 @@ def auto_canny(image, sigma=0.33):
 
 def find_circle(img,
                 valMedianBlur=19,
-                valKernelOpen=5,
-                valKernelClose=7,
-                valHoughParam1=241,
+                valKernelOpen=3,
+                valKernelClose=85,
+                valHoughParam1=47,
                 valHoughParam2=6,
                 valHoughMinDist=900,
                 valBlfD=15,
                 valBlfColor=750,
                 valBlfSpace=750,
-                valAdaptiveThreshold=107,
+                valAdaptiveThreshold=141,
                 show_debug_preview=True
                 ):
     win_HoughCircles = 'HoughCircles'
@@ -82,8 +87,22 @@ def find_circle(img,
     gray_img = cv2.bilateralFilter(gray_img, valBlfD, valBlfColor, valBlfSpace)
     if show_debug_preview: cv2.imshow('find_circle.bilateralFilter', gray_img)
 
-    # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold)
-    # if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
+    # Padding the image a little
+    padding = int(NORM_WIDTH / 10)
+    gray_img = cv2.copyMakeBorder(gray_img, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+    img = padding_img = cv2.copyMakeBorder(img, padding, padding, padding, padding, cv2.BORDER_CONSTANT,
+                                           value=[0, 0, 0])
+
+    # create a CLAHE object (Arguments are optional).
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    hist_img = clahe.apply(gray_img)
+    if show_debug_preview: cv2.imshow('find_circle.clahe', hist_img)
+
+    blur_img = cv2.medianBlur(gray_img, valMedianBlur)
+    if show_debug_preview: cv2.imshow('find_circle. medianBlur', blur_img)
+
+    gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold)
+    if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
 
     # MORPH_OPEN is erosion followed by dilation,
     #   eliminate noise outside the target
@@ -96,29 +115,52 @@ def find_circle(img,
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_CLOSE, mclose_kernel)
     if show_debug_preview: cv2.imshow('find_circle.MORPH_CLOSE', gray_img)
 
-    gray_img = cv2.addWeighted(gray_img, 0.05, cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 1, 0)
+    gray_img = cv2.addWeighted(gray_img, 0.05, blur_img, 1, 0)
     if show_debug_preview: cv2.imshow('find_circle.addWeighted', gray_img)
 
     # gray_img = auto_canny(gray_img)
     # if show_debug_preview: cv2.imshow('find_circle.auto_canny', gray_img)
 
     circles = cv2.HoughCircles(gray_img.copy(), cv2.HOUGH_GRADIENT, 1, valHoughMinDist,
-                               param1=valHoughParam1, param2=valHoughParam2, minRadius=0, maxRadius=0)
-    if circles is None:
-        print('circles={}, skip.'.format(circles))
-        cv2.destroyWindow(win_HoughCircles)
-        return
+                               param1=valHoughParam1, param2=valHoughParam2,
+                               minRadius=int(NORM_WIDTH / 2 - NORM_WIDTH * 0.3),
+                               maxRadius=int(NORM_WIDTH / 2 + NORM_WIDTH * 0.1))
 
     # --------------- Try using contour fit ----------------
     # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold)
     # if show_debug_preview: cv2.imshow('find_circle.adp_thresh_bin', gray_img)
+
+    # gray_img = cv2.bitwise_not(gray_img)
+    # if show_debug_preview: cv2.imshow('find_circle.invert', gray_img)
     #
     # largest_contour = find_largest_contour(gray_img)
-    # ellipse = cv2.fitEllipse(largest_contour)
-    # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
-    # if show_debug_preview: cv2.imshow('fitEllipse', img_ellipse)
+    #
+    # if show_debug_preview:
+    #     img_1 = img.copy()
+    #     cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 3)
+    #     cv2.imshow('find_circle.drawContours', img_1)
+    #
+    #     # img_2 = img.copy()
+    #     # epsilon = 0.01 * cv2.arcLength(largest_contour, True)
+    #     # approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+    #     # cv2.drawContours(img_2, [approx], -1, (0, 255, 255), 3)
+    #     # cv2.imshow('find_circle.drawContours(approxPolyDP)', img_2)
+    #
+    #     ellipse = cv2.fitEllipse(largest_contour)
+    #     img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
+    #     cv2.imshow('find_circle.fitEllipse', img_ellipse)
+    #     print("ellipse: %s" % str(ellipse))
+    #
+    #     # ellipse = cv2.fitEllipse(approx)
+    #     # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 255), 2)
+    #     # cv2.imshow('find_circle.fitEllipse(approxPolyDP)', img_ellipse)
+    #     # print("ellipse: %s(approxPolyDP)" % str(ellipse))
 
-    ret = []
+    # Post processing -------------------------------------------------------------
+    if circles is None:
+        logger.warning('No circle found')
+        cv2.destroyWindow(win_HoughCircles)
+        return []
     draw_circles = np.uint16(np.around(circles))
     for i in draw_circles[0, :]:
         # draw the outer circle
@@ -126,14 +168,14 @@ def find_circle(img,
         # draw the center of the circle
         cv2.circle(img, (i[0], i[1]), 2, (0, 0, 255), 1)
 
+    ret = []
     for i in circles[0, :]:
-
         # Scale the circle back to ori size
-        x = int(i[0] / factor)
-        y = int(i[1] / factor)
-        z = int(i[2] / factor)
+        x = int((i[0] - padding) / factor)
+        y = int((i[1] - padding) / factor)
+        r = int((i[2]) / factor)
 
-        ret.append(Circle(x, y, z))
+        ret.append(Circle(x, y, r))
 
     # cv2.imwrite("1.jpg", img)
     if show_debug_preview: cv2.imshow(win_HoughCircles, img)
@@ -145,9 +187,11 @@ def find_largest_contour(bin_img):
 
     largest_contour = None
     largest_area = 0
-    for c in contours:
+    if len(contours) > 0:
+        logger.debug('printing area of contours in `find_largest_contour()`')
+    for i, c in enumerate(contours):
         area = cv2.contourArea(c)
-        print('\tarea==%s' % area)
+        logger.debug('\t[%d/%d] area==%s', i + 1, len(contours), area)
         if area > largest_area:
             largest_contour = c
             largest_area = area
@@ -155,65 +199,151 @@ def find_largest_contour(bin_img):
     return largest_contour
 
 
+def find_black_drop(img, remaining_percentage=0.5) -> int:
+    """Use histogram to determine the major black threshold"""
+    hist = cv2.calcHist([img], [0], None, [256], [0, 256])
+    # hist is a 256x1 array
+    #   [Black -> White]
+    #   [  0   ..  255 ]
+
+    # print(hist[:])
+
+    def diff(list_): return [list_[n] - list_[n - 1] for n in range(1, len(list_))]
+
+    s = np.sum(hist[:])
+    hist = hist/s
+    dhist = diff(hist)
+
+    main_drop = min(dhist)
+    remaining_thr = main_drop * remaining_percentage
+    for i in range(dhist.index(main_drop), len(dhist)):
+        if dhist[i] < remaining_thr:
+            logger.debug('\tmoving to index=%d and checking remaining', i+1)
+            continue
+        else:
+            return i
+    logger.warning('reach the end of histogram, not found remaining threshold. min=%f, minindex=%d', main_drop, dhist.index(main_drop))
+    return dhist.index(main_drop)
+
+    # for i, h in enumerate(hist):
+    #     if i + tolerance >= len(hist):
+    #         # todo maybe not found
+    #         return i
+    #     if h - hist[i+tolerance] > abs(delta):
+    #         # return the first found
+    #         return int(i + tolerance/2)
+
+
 def find_main_object(img,
-                     valKernelOpen=5,
-                     valKernelClose=63,
-                     valAdaptiveThreshold1=250,
+                     valKernelOpen=43,
+                     valKernelClose=73,
+                     valAdaptiveThreshold1=245,
+                     valAdpBSize=11,
+                     valAdpC=2,
                      valAdaptiveThreshold2=250,
                      valMedianBlur=5,
+                     valUpperL=255,
+                     valLowerL=6,
+                     valThr=10,
                      show_debug_preview=True):
-    win_w = 500
+    previewwin_w = 500
 
     # Find the main object (a circle) in img
-    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold1)
-    if show_debug_preview: cv2.imshow('find_main_circle.adp_thresh_bin1', resize_bin(gray_img, win_w))
+
+    # # Filter HSL
+    # hsl_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+    # lower_hsl = np.array([0,0,valLowerL])
+    # upper_hsl = np.array([255,255,valUpperL])
+    #
+    # # Threshold the HSV image
+    # mask = cv2.inRange(hsl_img, lower_hsl, upper_hsl)
+    # if show_debug_preview: cv2.imshow('find_main_circle.filterHSLinRange', resize_bin(mask, previewwin_w))
+    #
+    # gray_img = mask
+
+    # # Bitwise-AND mask and original image
+    # masked = cv2.bitwise_and(img, img, mask=mask)
+    # if show_debug_preview: cv2.imshow('find_main_circle.filterHSL', resize(masked, previewwin_w))
+
+    masked = img
+    gray_img = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
+
+    # # create a CLAHE object (Arguments are optional).
+    # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    # gray_img = clahe.apply(gray_img)
+    # if show_debug_preview: cv2.imshow('find_main_circle.clahe', resize_bin(gray_img, previewwin_w))
+    gray_img_ = gray_img.copy()
+
+    # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold1)
+    # if show_debug_preview: cv2.imshow('find_main_circle.adp_thresh_bin1', resize_bin(gray_img, previewwin_w))
+
+    # Find a suitable threshold from histogram
+    majorblack = find_black_drop(gray_img, 0.05)
+    logger.debug('majorblack==%d', majorblack)
+    ret, gray_img = cv2.threshold(gray_img, majorblack, 255, cv2.THRESH_BINARY)
+    if show_debug_preview: cv2.imshow('find_main_circle.majorblack', resize_bin(gray_img, previewwin_w))
+
+    ret, test_view = cv2.threshold(gray_img_, valThr, 255, cv2.THRESH_BINARY)
+    if show_debug_preview: cv2.imshow('find_main_circle.valThr'.format(valThr), resize_bin(test_view, previewwin_w))
+
+    # gray_img = cv2.adaptiveThreshold(gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C ,
+    #                                  cv2.THRESH_BINARY, blockSize=valAdpBSize, C=valAdpC)
+    # if show_debug_preview:
+    #     cv2.imshow('find_main_circle.adaptiveThreshold', resize_bin(gray_img, previewwin_w))
 
     # MORPH_OPEN is erosion followed by dilation,
     #   eliminate noise outside the target
     mopen_kernel = np.ones((valKernelOpen, valKernelOpen), np.uint8)
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_OPEN, mopen_kernel)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_OPEN', resize_bin(gray_img, win_w))
+        cv2.imshow('find_main_circle.MORPH_OPEN', resize_bin(gray_img, previewwin_w))
 
     # Eliminate the noise inside
     mclose_kernel = np.ones((valKernelClose, valKernelClose), np.uint8)
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_CLOSE, mclose_kernel)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_CLOSE', resize_bin(gray_img, win_w))
+        cv2.imshow('find_main_circle.MORPH_CLOSE', resize_bin(gray_img, previewwin_w))
 
     pimg = cv2.medianBlur(gray_img, valMedianBlur)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.medianBlur', resize_bin(pimg, win_w))
+        cv2.imshow('find_main_circle.medianBlur', resize_bin(pimg, previewwin_w))
 
-    gray_img = adp_thresh_bin(pimg, valAdaptiveThreshold2)
-    if show_debug_preview:
-        cv2.imshow('find_main_circle.adp_thresh_bin1', resize_bin(gray_img, win_w))
+    # gray_img = adp_thresh_bin(pimg, valAdaptiveThreshold2)
+    # if show_debug_preview:
+    #     cv2.imshow('find_main_circle.adp_thresh_bin2', resize_bin(gray_img, previewwin_w))
 
     image, contours, hierarchy = cv2.findContours(gray_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     largest_contour = find_largest_contour(gray_img)
     x, y, w, h = cv2.boundingRect(largest_contour)
 
+    if w == 0 or h == 0:
+        logger.warning('in find_main_object(), find boundingRect failed, w=%d, h=%d', w, h)
+        return None, None, None
+
     if show_debug_preview:
         img_1 = img.copy()
         cv2.drawContours(img_1, contours, -1, (0, 255, 0), 3)
-        cv2.imshow('findContours.drawContours', resize(img_1, win_w*2))
+        cv2.imshow('find_main_object.drawContours', resize(img_1, previewwin_w * 2))
 
-        img_2 = img.copy()
-        ellipse = cv2.fitEllipse(largest_contour)
-        img_2 = cv2.ellipse(img_2, ellipse, (0, 255, 0), 3)
-        cv2.imshow('findContours.fitEllipse', resize(img_2, win_w*2))
+        try:
+            img_2 = img.copy()
+            ellipse = cv2.fitEllipse(largest_contour)
+            img_2 = cv2.ellipse(img_2, ellipse, (0, 255, 0), 3)
+            cv2.imshow('find_main_object.fitEllipse', resize(img_2, previewwin_w * 2))
+        except:
+            cv2.destroyWindow('find_main_object.fitEllipse')
+            logger.exception('failed to fitEllipse')
 
         # img_3 = img.copy()
         # img_3 = cv2.rectangle(img_3, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        # cv2.imshow('findContours.boundingRect', resize(img_3, win_w*2))
+        # cv2.imshow('findContours.boundingRect', resize(img_3, previewwin_w*2))
 
-    roi = img[y:y+h, x:x+w]
+    roi = img[y:y + h, x:x + w]
     if show_debug_preview:
         cv2.imshow('roi', roi)
 
-    print('roi x={}, y={}, w={}, h={}'.format(x, y, w, h))
+    logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x, y, w, h))
 
     return roi, x, y
 
@@ -226,6 +356,9 @@ def draw_moon(img, moon: Circle):
 
 def find_moon(img) -> Circle:
     roi, rx, ry = find_main_object(img, show_debug_preview=False)
+    if roi is None:
+        logger.error('Failed to locate a main object, aborted.')
+        return None
     circles = find_circle(roi, show_debug_preview=False)
 
     if not circles:
@@ -233,7 +366,7 @@ def find_moon(img) -> Circle:
 
     ret_circle = circles[0]
     if len(circles) > 1:
-        print('Warning: detected more than one circle')
+        logger.warning('Warning: detected more than one circle, use the largest one')
 
         largest_r = 0
         for c in circles:
@@ -246,5 +379,3 @@ def find_moon(img) -> Circle:
     ret_circle.y += ry
 
     return ret_circle
-
-

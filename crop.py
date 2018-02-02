@@ -27,13 +27,18 @@ save_cropped_folder = './'
 for img_path in images:
     try:
         ori_img = cv2.imread(img_path)
+        if ori_img is None:
+            print('load image "%s" failed' % img_path)
+            continue
         # img = cv2.resize(ori_img, (0, 0), fx=1, fy=1)
         img = ori_img.copy()
 
         moon = find_moon(img)
         if not moon:
-            print('moon not detected in {}'.format(img_path))
+            print('moon not detected in {}, press any key to continue'.format(img_path))
             cv2.imshow('ori - {}'.format(img_path), resize(img, PREVIEW_WIDTH))
+            cv2.waitKey()
+            cv2.destroyAllWindows()
             continue
 
         draw_img = img.copy()

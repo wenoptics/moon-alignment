@@ -31,6 +31,7 @@ for img_path in test_img:
 
     cv2.imshow('moondetect - {}'.format(img_path), resize(img, PREVIEW_WIDTH))
     # cv2.imwrite('img/moondetect_preview.jpg'.format(img_path), img)
+    cv2.waitKey()
 
-cv2.waitKey()
+
 cv2.destroyAllWindows()

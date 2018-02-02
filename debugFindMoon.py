@@ -1,3 +1,4 @@
+import logging
 from time import time
 
 import cv2
@@ -5,6 +6,8 @@ import numpy as np
 
 from find import find_circle, find_main_object
 from utils.util import myTuneWindow
+
+logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
 
 
 def loadimg():
@@ -17,9 +20,11 @@ def loadimg():
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01313.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01321.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01325.jpg',
-        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01332.jpg',
+        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01332.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01350.jpg',
-        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01353.jpg',
+        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01353.jpg',
+        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01364.jpg',
+        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01367.jpg',
     )
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.1, fy=0.1)
     print('origin img.shape={}'.format(ori_img.shape))
@@ -31,7 +36,7 @@ def loadimg():
                  valHoughParam1=(1, 300),
                  valHoughParam2=(1, 300),
                  valHoughMinDist=(1, 1000),
-                 # valAdaptiveThreshold=(0,255),
+                 valAdaptiveThreshold=(0,255),
                  valBlfColor=(0, 1250),
                  valBlfSpace=(0, 1250),
                  valBlfD=(0, 30),
