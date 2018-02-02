@@ -19,6 +19,9 @@ def myTuneWindow(callback, img, **kwargs):
     :return:
     '''
 
+    global retval
+    retval = None
+
     def _cb(x):
         for k, v in kwargs.items():
             _start = v[0]
@@ -29,7 +32,8 @@ def myTuneWindow(callback, img, **kwargs):
 
         print('param changed:', valueDict)
 
-        callback(img, **valueDict)
+        global retval
+        retval = callback(img, **valueDict)
 
     cv2.namedWindow('tune', cv2.WINDOW_NORMAL)
 
@@ -54,10 +58,12 @@ def myTuneWindow(callback, img, **kwargs):
     cv2.resizeWindow('tune', 600, 9 * len(kwargs))
 
     # Make a call at the run
-    callback(img, **valueDict)
+    retval = callback(img, **valueDict)
 
     # Wait for the tune window being closed
     while cv2.getWindowProperty('tune', 0) >= 0:
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+    return retval

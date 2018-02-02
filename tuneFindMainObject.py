@@ -15,18 +15,18 @@ def turn_find_main_object(img_path):
     cv2.imshow('ori', resize(ori_img, 500))
     print('origin img.shape={}'.format(ori_img.shape))
 
-    myTuneWindow(find_main_object, ori_img,
-                 valMedianBlur=(1, 30, 2),
-                 valKernelOpen=(1, 100, 2),
-                 valKernelClose=(1, 100, 2),
-                 valAdaptiveThreshold1=(1, 255),
-                 # valAdaptiveThreshold2=(1, 255),
-                 # valAdpBSize=(1, 30, 2),
-                 # valAdpC=(1, 30),
-                 valUpperL=(0,255),
-                 valLowerL=(0,255),
-                 valThr=(0,255),
-                 )
+    return myTuneWindow(find_main_object, ori_img,
+                        valMedianBlur=(1, 30, 2),
+                        valKernelOpen=(1, 100, 2),
+                        valKernelClose=(1, 100, 2),
+                        valAdaptiveThreshold1=(1, 255),
+                        # valAdaptiveThreshold2=(1, 255),
+                        # valAdpBSize=(1, 30, 2),
+                        # valAdpC=(1, 30),
+                        valUpperL=(0,255),
+                        valLowerL=(0,255),
+                        valThr=(0,255),
+                        )
 
 
 if __name__ == '__main__':

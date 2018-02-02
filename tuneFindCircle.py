@@ -1,8 +1,6 @@
 import logging
-from time import time
 
 import cv2
-import numpy as np
 
 from find import find_circle, find_main_object
 from utils.util import myTuneWindow
@@ -11,18 +9,18 @@ logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(m
 
 
 def tune_find_circle(img):
-    myTuneWindow(find_circle, img,
-                 # valMedianBlur=(1, 30, 2),
-                 valKernelOpen=(1, 100, 2),
-                 valKernelClose=(1, 100, 2),
-                 valHoughParam1=(1, 300),
-                 valHoughParam2=(1, 300),
-                 valHoughMinDist=(1, 1000),
-                 valAdaptiveThreshold=(0,255),
-                 valBlfColor=(0, 1250),
-                 valBlfSpace=(0, 1250),
-                 valBlfD=(0, 30),
-                 )
+    return myTuneWindow(find_circle, img,
+                        # valMedianBlur=(1, 30, 2),
+                        valKernelOpen=(1, 100, 2),
+                        valKernelClose=(1, 100, 2),
+                        valHoughParam1=(1, 300),
+                        valHoughParam2=(1, 300),
+                        valHoughMinDist=(1, 1000),
+                        valAdaptiveThreshold=(0,255),
+                        valBlfColor=(0, 1250),
+                        valBlfSpace=(0, 1250),
+                        valBlfD=(0, 30),
+                        )
 
 
 if __name__ == '__main__':
