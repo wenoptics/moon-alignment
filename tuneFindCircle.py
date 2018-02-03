@@ -3,24 +3,25 @@ import logging
 import cv2
 
 from find import find_circle, find_main_object
-from utils.util import myTuneWindow
+from utils.util import Tuning
 
 logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
 
 
 def tune_find_circle(img):
-    return myTuneWindow(find_circle, img,
-                        # valMedianBlur=(1, 30, 2),
-                        valKernelOpen=(1, 100, 2),
-                        valKernelClose=(1, 100, 2),
-                        valHoughParam1=(1, 300),
-                        valHoughParam2=(1, 300),
-                        valHoughMinDist=(1, 1000),
-                        valAdaptiveThreshold=(0,255),
-                        valBlfColor=(0, 1250),
-                        valBlfSpace=(0, 1250),
-                        valBlfD=(0, 30),
-                        )
+    t = Tuning(find_circle, img,
+                  # valMedianBlur=(1, 30, 2),
+                  valKernelOpen=(1, 100, 2),
+                  valKernelClose=(1, 100, 2),
+                  valHoughParam1=(1, 300),
+                  valHoughParam2=(1, 300),
+                  valHoughMinDist=(1, 1000),
+                  valAdaptiveThreshold=(0,255),
+                  valBlfColor=(0, 1250),
+                  valBlfSpace=(0, 1250),
+                  valBlfD=(0, 30),
+                  )
+    return t.run()
 
 
 if __name__ == '__main__':
