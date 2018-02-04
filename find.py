@@ -3,6 +3,8 @@ import logging
 import cv2
 import numpy as np
 
+from utils.util import resize_bin, resize
+
 logger = logging.getLogger(__name__)
 
 
@@ -15,19 +17,6 @@ class Circle():
 
 # Normalize image
 NORM_WIDTH = 500
-
-
-def resize(img, dst_width):
-    h, w, _ = img.shape
-    factor = dst_width / w
-    return cv2.resize(img, (0, 0), fx=factor, fy=factor)
-
-
-def resize_bin(img, dst_width):
-    h, w = img.shape
-    factor = dst_width / w
-    return cv2.resize(img, (0, 0), fx=factor, fy=factor)
-
 
 def scale_to_normal(img):
     h, w, _ = img.shape

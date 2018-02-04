@@ -2,7 +2,21 @@ import inspect
 import logging
 import tkinter
 
+import cv2
+
 logger = logging.getLogger(__name__)
+
+
+def resize(img, dst_width):
+    h, w, _ = img.shape
+    factor = dst_width / w
+    return cv2.resize(img, (0, 0), fx=factor, fy=factor)
+
+
+def resize_bin(img, dst_width):
+    h, w = img.shape
+    factor = dst_width / w
+    return cv2.resize(img, (0, 0), fx=factor, fy=factor)
 
 
 class SteppedIntVar(tkinter.IntVar):
