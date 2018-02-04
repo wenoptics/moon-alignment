@@ -29,16 +29,15 @@ class CVStep:
             self.__cb[0].__call__(*self.__cb[1], **self.__cb[2])
 
     def apply_values(self):
-        self.__doaftercancel = None
         # Make a copy
         vd = dict(self.valuedict)
         for k, v in self.valuedict.items():
             vd[k] = v.get()
-        self.logger.debug('in "%s" param changed: %s', self.handler.__name__, str(vd))
+        self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
         ret = self.handler.__call__(*self.directargs, **vd)
 
         if self.show_preview:
-            img = ret[0]
+            img = ret[0] if type(ret) is tuple else ret
             cv2.imshow('[{}]{}'.format(self.stepn, self.handler.__name__), img)
 
         return ret
@@ -81,7 +80,7 @@ class CVStep:
             self.valuedict[paramname] = dynvar
 
             def _trackbar_callback(_):
-                print('trackbar value changed in step ', self.stepn)
+                # print('trackbar value changed in step ', self.stepn)
                 if self.UPDATE_AFTER_CANCEL:
                     if self.__doaftercancel:
                         tk.after_cancel(self.__doaftercancel)
@@ -93,6 +92,7 @@ class CVStep:
                                      from_=_start, to=_end, variable=dynvar, label=paramname,
                                      command=_trackbar_callback, orient=tkinter.HORIZONTAL, length=500)
             trackbar.pack()
+            self.logger.debug('trackbar for "%s" created', paramname)
 
 
 class CVPipeline:
@@ -110,6 +110,7 @@ class CVPipeline:
         self._tk = tkinter.Tk()
         self._should_create_tuneui = False
         self._flag_update_only = False
+        self.__doaftercancel = None
 
     def _pipeline(self, *inputargs):
         """
@@ -139,6 +140,8 @@ class CVPipeline:
     def _run_pipeline_update(self):
         """re-run pipeline, only for updating values(tuning params)"""
         assert len(self.steps) > 0
+        # Skip blink when initializing sliders
+        self.__doaftercancel = None
         self._currentstep = 0
         self._should_create_tuneui = False
         self._flag_update_only = True
@@ -170,9 +173,18 @@ class CVPipeline:
         else:
             step = CVStep(handler, *directargs, show_preview=show_preview)
             step.stepn = self._currentstep
-            step.set_update_callback(self._run_pipeline_update)
+
+            def _cb():
+                # Skip blink when initializing sliders
+                if self.__doaftercancel:
+                    self._tk.after_cancel(self.__doaftercancel)
+                self.__doaftercancel = self._tk.after(500, self._run_pipeline_update)
+
+            step.set_update_callback(_cb)
             if self._should_create_tuneui:
                 step.create_tune_trackbar(self._tk, **kwargs)
+
+            self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
 
             # Save step info
             self.steps.append(step)
@@ -194,11 +206,11 @@ if __name__ == '__main__':
             def procedure1(img, _valA=5, _valB=12):
                 ret1 = {}
                 ret2 = _valA + _valB
-                print('procedure1: ret2==', ret2)
+                print('procedure1: _valA=',_valA,'_valB=',_valB,'ret2==', ret2)
                 return img, ret1, ret2
 
             step1ret = self._add_tune_step(procedure1, img_,
-                                           _valA=(0, 100, 2),
+                                           _valA=(0, 100, 1),
                                            _valB=(0, 100, 2),
                                            )
 
