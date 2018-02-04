@@ -1,8 +1,10 @@
+import configparser
 import inspect
 import logging
 import tkinter
 
 import cv2
+import os
 
 from utils.util import SteppedIntVar, resize
 
@@ -17,6 +19,7 @@ class CVStep:
         self.stepn = 0
         self.valuedict = {}
         self.logger = logging.getLogger(self.__class__.__name__)
+
         self.__doaftercancel = None
         self.__cb = (None, (), {})
 
@@ -25,14 +28,20 @@ class CVStep:
 
     def _on_update_trackbar(self):
         self.__doaftercancel = None
+        vd = self.get_actual_valuedict()
+        self.logger.debug('"%s" tune params changed: %s', self.handler.__name__, str(vd))
         if self.__cb[0]:
             self.__cb[0].__call__(*self.__cb[1], **self.__cb[2])
 
-    def apply_values(self):
+    def get_actual_valuedict(self):
         # Make a copy
         vd = dict(self.valuedict)
         for k, v in self.valuedict.items():
             vd[k] = v.get()
+        return vd
+
+    def apply_values(self):
+        vd = self.get_actual_valuedict()
         self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
         ret = self.handler.__call__(*self.directargs, **vd)
 
@@ -42,7 +51,7 @@ class CVStep:
 
         return ret
 
-    def create_tune_trackbar(self, tk, **tunes):
+    def create_tune_trackbar(self, tk, initoverride: dict=None, **tunes):
         # Looking for init value from the handler function
         sig = inspect.signature(self.handler)
         # This is how we define rules for a valid tuning parameter
@@ -58,11 +67,16 @@ class CVStep:
                 self.logger.warning('no tuning found for "%s". (ignore if it is not a tuning '
                                     'parameter you concerning)', param.name)
 
+        # Make override
+        if initoverride:
+            for k,v in initoverride.items():
+                self.logger.debug('initial value of "%s" override to %s', k, v)
+                tuninginitvalues[k] = v
+
         # Delete not used tunes
         for k in list(tunes.keys()):  # make a dict copy
             if k not in [param.name for param in tuningparams]:
-                self.logger.warning('tuning param "%s" not found in tuning target `%s`, ignored.', k,
-                                    self.handler.__name__)
+                self.logger.warning('tuning param "%s" not found in tuning target `%s`, ignored.', k, self.handler.__name__)
                 del tunes[k]
 
         # Create trackbars
@@ -102,6 +116,8 @@ class CVPipeline:
         self.steps = []
         self.pipelinename = self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.configpath = './'
+        self.savedconfig = self.load_tuning()
 
         self._retval = None
         self._current_input = ()
@@ -112,6 +128,10 @@ class CVPipeline:
         self._flag_update_only = False
         self.__doaftercancel = None
 
+    @property
+    def configurl(self):
+        return os.path.join(self.configpath, self.pipelinename+'.conf')
+
     def _pipeline(self, *inputargs):
         """
         Implement your own pipeline here.
@@ -119,9 +139,10 @@ class CVPipeline:
             Function for a step can be like this:
 
             def procedure1(img, foo, bar, _valA=5, _valB=12):
-                pass
+                return img, foo+1
 
             Parameter starts with a '_' and have a init val will be regarded as a tuning parameter.
+            If you want to preview tuned img, you should return the image in the 1st position.
 
         :param inputargs:
         :return:
@@ -133,6 +154,8 @@ class CVPipeline:
         self._should_create_tuneui = True
         self._flag_update_only = False
         self._currentstep = 0
+        self._create_common_gui()
+
         self._retval = self._pipeline(*inputargs)
         self._tk.mainloop()
         return self._retval
@@ -153,14 +176,43 @@ class CVPipeline:
     #     self._currentstep = 0
     #     return self._pipeline(*inputargs)
 
+    def _create_common_gui(self):
+        self._tk.title(self.pipelinename)
+
+        # Create a SAVE button
+        b = tkinter.Button(self._tk, text="SAVE CURRENT", command=self.save_tuning)
+        b.pack()
+
+        def load_default():
+            pass
+
+        b = tkinter.Button(self._tk, text="LOAD DEFAULT", command=load_default)
+        b.pack()
+
     def save_tuning(self):
         """Save tuning setting to file"""
-        # todo
-        pass
+        fn = self.configurl
+        config = configparser.ConfigParser()
+        for step in self.steps:
+            sect = step.handler.__name__
+            config.add_section(sect)
+            vd = step.get_actual_valuedict()
+            for k,v in vd.items():
+                print('setting config:', step.handler.__name__, k, str(v))
+                config.set(sect, k, str(v))
+        config.write(open(fn, 'w'))
+        self.logger.info('tuning config file saved to "%s"', fn)
 
-    def load_tuning(self):
-        # todo
-        pass
+    def load_tuning(self) -> configparser.ConfigParser:
+        fn = self.configurl
+        config = configparser.ConfigParser()
+        config.read(fn)
+        self.logger.info('loading tuning config file from "%s"', fn)
+        # for step in self.steps:
+        #     for k,v in step.valuedict.items():
+        #         value_ = config.get(step.handler.__name__, k)
+        #         step.valuedict[k].set(value_)
+        return config
 
     def _add_tune_step(self, handler, *directargs, show_preview=True, **kwargs):
         if self._flag_update_only:
@@ -182,7 +234,14 @@ class CVPipeline:
 
             step.set_update_callback(_cb)
             if self._should_create_tuneui:
-                step.create_tune_trackbar(self._tk, **kwargs)
+                # Try to read init value from config
+                initoverride = {}
+                sect = handler.__name__
+                if self.savedconfig.has_section(sect):
+                    for k,v in kwargs.items():
+                        if self.savedconfig.has_option(sect, k):
+                            initoverride[k] = self.savedconfig.get(sect, k)
+                step.create_tune_trackbar(self._tk, **kwargs, initoverride=initoverride)
 
             self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
 
@@ -197,7 +256,6 @@ class CVPipeline:
 
 if __name__ == '__main__':
     """This is an example (as well)"""
-
 
     class TuneSomething(CVPipeline):
         def _pipeline(self, *inputargs):
