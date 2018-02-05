@@ -12,7 +12,7 @@ from utils.util import SteppedIntVar, resize
 class CVStep:
     UPDATE_AFTER_CANCEL = True
 
-    def __init__(self, handler, *directargs, show_preview=True):
+    def __init__(self, from_pipeline:'CVPipeline', handler, *directargs, show_preview=True):
         self.valuedict = {}
         self.paramsettingdict = {}
         self.handler = handler
@@ -20,7 +20,7 @@ class CVStep:
         self.show_preview = show_preview
         self.stepn = 0
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.suppress_preview = False
+        self.frompipeline = from_pipeline
 
         self.__doaftercancel = None
         self.__cb = (None, (), {})
@@ -47,9 +47,13 @@ class CVStep:
         self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
         ret = self.handler.__call__(*self.directargs, **vd)
 
-        if self.show_preview and not self.suppress_preview:
+        if self.show_preview and not self.frompipeline._suppress_preview:
             img = ret[0] if type(ret) is tuple else ret
-            cv2.imshow('[{}]{}'.format(self.stepn, self.handler.__name__), img)
+            _winname = '[{}]{}'.format(self.stepn, self.handler.__name__)
+            if self.frompipeline.force_resize_preview_w > 0:
+                img = resize(img, self.frompipeline.force_resize_preview_w)
+                _winname += '(resized)'
+            cv2.imshow(_winname, img)
 
         return ret
 
@@ -87,27 +91,30 @@ class CVStep:
 
         # Create trackbars
         for paramname, paramsetting in tunes.items():
-            _start = paramsetting[0]
-            _end = paramsetting[1]
-            _step = paramsetting[2] if len(paramsetting) == 3 else 1
+            start_ = paramsetting[0]
+            end_ = paramsetting[1]
+            step_ = paramsetting[2] if len(paramsetting) > 2 else 1
             initval = tuninginitvalues[paramname]
-            if _step != 1:
+            type_set = {type(start_), type(end_), type(step_), type(initval)}
+            type_ = float if float in type_set else int
+            if step_ != 1:
                 # use SteppedIntVar
-                assert _step > 0
-                dynvar = SteppedIntVar(starting=_start, step=_step, value=initval)
+                assert step_ > 0
+                dynvar = SteppedIntVar(starting=start_, step=step_, value=initval)
+                type_ = int
             else:
                 dynvar = tkinter.DoubleVar(value=initval)
             self.valuedict[paramname] = dynvar
             self.paramsettingdict[paramname] = {
-                'from': _start,
-                'to': _end,
-                'step': _step,
-                'dynvar': dynvar
+                'from': start_,
+                'to': end_,
+                'step': step_,
+                'dynvar': dynvar,
+                'type': type_
             }
 
     def create_tune_trackbar(self, tk):
         """Please make sure you have called init_tune_params() before this"""
-
         for paramname,v in self.paramsettingdict.items():
 
             def _trackbar_callback(_):
@@ -119,22 +126,34 @@ class CVStep:
                 else:
                     self._on_update_trackbar()
 
+            resolution_ = {}
+            if v['type'] is float:
+                resolution_ = {'resolution': (v['to'] - v['from'])/100}
             trackbar = tkinter.Scale(tk,
                                      from_=v['from'], to=v['to'], variable=v['dynvar'], label=paramname,
-                                     command=_trackbar_callback, orient=tkinter.HORIZONTAL, length=500)
+                                     command=_trackbar_callback, orient=tkinter.HORIZONTAL, length=500, **resolution_)
             trackbar.pack()
             self.logger.debug('trackbar for "%s" created', paramname)
 
 
 class CVPipeline:
-    """A abstract class that help tuning your OpenCV app pipeline with convenience (wenoptk)"""
+    """A abstract class that help tuning your OpenCV app pipeline with convenience (wenoptk)
 
-    def __init__(self):
-        self.steps = []
+        Call .run_pipeline_tuning() to tune your pipeline!
+        Call .load_pipeline_quite() then .run_pipeline_final() to run your tuned pipeline!
+    """
+
+    def __init__(self, force_resize_preview_w=0):
+        """
+
+        :param force_resize_preview_w: Force preview img to dst width. 0 for no scale
+        """
+        self.force_resize_preview_w = force_resize_preview_w
         self.pipelinename = self.__class__.__name__
-        self.logger = logging.getLogger(self.__class__.__name__)
         self.configpath = './'
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.savedconfig = self.load_tuning()
+        self.steps = []
 
         self._retval = None
         self._current_input = ()
@@ -260,7 +279,7 @@ class CVPipeline:
                 raise Exception('This step is not loaded yet. Did you call _run_pipeline_update before load steps?')
 
         else:
-            step = CVStep(handler, *directargs, show_preview=show_preview)
+            step = CVStep(self, handler, *directargs, show_preview=show_preview)
             step.stepn = self._currentstep
 
             def _cb():
@@ -284,12 +303,10 @@ class CVPipeline:
             if self._should_create_tuneui:
                 step.create_tune_trackbar(self._tk)
 
-            self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
-
             # Save step info
             self.steps.append(step)
+            self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
 
-        step.suppress_preview = self._suppress_preview
         ret = step.apply_values()
 
         self._currentstep += 1

@@ -3,7 +3,8 @@ import logging
 import cv2
 import numpy as np
 
-from utils.util import resize_bin, resize
+from utils.CVPipeline import CVPipeline
+from utils.util import resize
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class Circle():
 
 # Normalize image
 NORM_WIDTH = 500
+
 
 def scale_to_normal(img):
     h, w, _ = img.shape
@@ -191,16 +193,18 @@ def find_largest_contour(bin_img):
 def find_black_drop(img, remaining_percentage=0.5) -> int:
     """Use histogram to determine the major black threshold"""
     hist = cv2.calcHist([img], [0], None, [256], [0, 256])
+
     # hist is a 256x1 array
     #   [Black -> White]
     #   [  0   ..  255 ]
 
     # print(hist[:])
 
-    def diff(list_): return [list_[n] - list_[n - 1] for n in range(1, len(list_))]
+    def diff(list_):
+        return [list_[n] - list_[n - 1] for n in range(1, len(list_))]
 
     s = np.sum(hist[:])
-    hist = hist/s
+    hist = hist / s
     dhist = diff(hist)
 
     # print(hist)
@@ -209,11 +213,12 @@ def find_black_drop(img, remaining_percentage=0.5) -> int:
     remaining_thr = main_drop * remaining_percentage
     for i in range(dhist.index(main_drop), len(dhist)):
         if dhist[i] < remaining_thr:
-            logger.debug('\tmoving to index=%d and checking remaining', i+1)
+            logger.debug('\tmoving to index=%d and checking remaining', i + 1)
             continue
         else:
             return i
-    logger.warning('reach the end of histogram, not found remaining threshold. min=%f, minindex=%d', main_drop, dhist.index(main_drop))
+    logger.warning('reach the end of histogram, not found remaining threshold. min=%f, minindex=%d', main_drop,
+                   dhist.index(main_drop))
     return dhist.index(main_drop)
 
     # for i, h in enumerate(hist):
@@ -225,36 +230,42 @@ def find_black_drop(img, remaining_percentage=0.5) -> int:
     #         return int(i + tolerance/2)
 
 
+class FindMainObject(CVPipeline):
+    def _pipeline(self, *inputargs):
+        img = inputargs[0]
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Find a suitable threshold from histogram
+        def auto_threshold(img, _percent=0.05):
+            majorblack = find_black_drop(img, _percent)
+            logger.debug('majorblack==%d', majorblack)
+            _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
+            return gray_img
+        img_auto_thr = self._add_tune_step(auto_threshold, gray_img, _percent=(0.001, 0.6))
+
+        # For comparision
+        def threshold_bin(img, _threshold=10):
+            ret, retimg = cv2.threshold(img, _threshold, 255, cv2.THRESH_BINARY)
+            return retimg
+        self._add_tune_step(threshold_bin, gray_img, _threshold=(0, 255))
+
+        # MORPH_OPEN is erosion followed by dilation,
+        #   eliminate noise outside the target
+        def morphopen(img, _kernel=43):
+            mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
+        _img = self._add_tune_step(morphopen, img_auto_thr, _kernel=(1, 100, 2))
+
+
 def find_main_object(img,
-                     valKernelOpen=43,
-                     valKernelClose=73,
-                     # valAdaptiveThreshold1=245,
-                     # valAdpBSize=11,
-                     # valAdpC=2,
-                     # valAdaptiveThreshold2=250,
-                     valMedianBlur=5,
-                     # valUpperL=255,
-                     # valLowerL=6,
-                     valThr=10,
-                     show_debug_preview=True):
+                     _kernelOpen=43,
+                     _kernelClose=73,
+                     _medianBlur=5,
+                     _threshold=10,
+                     ):
+    """Find the main object (a circle) in img"""
     previewwin_w = 500
 
-    # Find the main object (a circle) in img
-
-    # # Filter HSL
-    # hsl_img = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
-    # lower_hsl = np.array([0,0,valLowerL])
-    # upper_hsl = np.array([255,255,valUpperL])
-    #
-    # # Threshold the HSV image
-    # mask = cv2.inRange(hsl_img, lower_hsl, upper_hsl)
-    # if show_debug_preview: cv2.imshow('find_main_circle.filterHSLinRange', resize_bin(mask, previewwin_w))
-    #
-    # gray_img = mask
-
-    # # Bitwise-AND mask and original image
-    # masked = cv2.bitwise_and(img, img, mask=mask)
-    # if show_debug_preview: cv2.imshow('find_main_circle.filterHSL', resize(masked, previewwin_w))
 
     masked = img
     gray_img = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
@@ -272,10 +283,10 @@ def find_main_object(img,
     majorblack = find_black_drop(gray_img, 0.05)
     logger.debug('majorblack==%d', majorblack)
     ret, gray_img = cv2.threshold(gray_img, majorblack, 255, cv2.THRESH_BINARY)
-    if show_debug_preview: cv2.imshow('find_main_circle.majorblack', resize_bin(gray_img, previewwin_w))
+    if show_debug_preview: cv2.imshow('find_main_circle.majorblack', resize(gray_img, previewwin_w))
 
-    ret, test_view = cv2.threshold(gray_img_, valThr, 255, cv2.THRESH_BINARY)
-    if show_debug_preview: cv2.imshow('find_main_circle.valThr'.format(valThr), resize_bin(test_view, previewwin_w))
+    ret, test_view = cv2.threshold(gray_img_, _threshold, 255, cv2.THRESH_BINARY)
+    if show_debug_preview: cv2.imshow('find_main_circle.valThr'.format(_threshold), resize(test_view, previewwin_w))
 
     # gray_img = cv2.adaptiveThreshold(gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C ,
     #                                  cv2.THRESH_BINARY, blockSize=valAdpBSize, C=valAdpC)
@@ -284,20 +295,20 @@ def find_main_object(img,
 
     # MORPH_OPEN is erosion followed by dilation,
     #   eliminate noise outside the target
-    mopen_kernel = np.ones((valKernelOpen, valKernelOpen), np.uint8)
+    mopen_kernel = np.ones((_kernelOpen, _kernelOpen), np.uint8)
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_OPEN, mopen_kernel)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_OPEN', resize_bin(gray_img, previewwin_w))
+        cv2.imshow('find_main_circle.MORPH_OPEN', resize(gray_img, previewwin_w))
 
     # Eliminate the noise inside
-    mclose_kernel = np.ones((valKernelClose, valKernelClose), np.uint8)
+    mclose_kernel = np.ones((_kernelClose, _kernelClose), np.uint8)
     gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_CLOSE, mclose_kernel)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_CLOSE', resize_bin(gray_img, previewwin_w))
+        cv2.imshow('find_main_circle.MORPH_CLOSE', resize(gray_img, previewwin_w))
 
-    pimg = cv2.medianBlur(gray_img, valMedianBlur)
+    pimg = cv2.medianBlur(gray_img, _medianBlur)
     if show_debug_preview:
-        cv2.imshow('find_main_circle.medianBlur', resize_bin(pimg, previewwin_w))
+        cv2.imshow('find_main_circle.medianBlur', resize(pimg, previewwin_w))
 
     # gray_img = adp_thresh_bin(pimg, valAdaptiveThreshold2)
     # if show_debug_preview:

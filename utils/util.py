@@ -8,13 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 def resize(img, dst_width):
-    h, w, _ = img.shape
-    factor = dst_width / w
-    return cv2.resize(img, (0, 0), fx=factor, fy=factor)
-
-
-def resize_bin(img, dst_width):
-    h, w = img.shape
+    l = len(img.shape)
+    if l == 3:
+        h, w, _ = img.shape
+    elif l == 2:
+        h, w = img.shape
+    else:
+        raise ValueError
     factor = dst_width / w
     return cv2.resize(img, (0, 0), fx=factor, fy=factor)
 
