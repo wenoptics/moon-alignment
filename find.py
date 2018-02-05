@@ -233,7 +233,7 @@ def find_black_drop(img, remaining_percentage=0.5) -> int:
 class FindMainObject(CVPipeline):
     def _pipeline(self, *inputargs):
         img = inputargs[0]
-        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find a suitable threshold from histogram
         def auto_threshold(img, _percent=0.05):
@@ -241,20 +241,36 @@ class FindMainObject(CVPipeline):
             logger.debug('majorblack==%d', majorblack)
             _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
             return gray_img
-        img_auto_thr = self._add_tune_step(auto_threshold, gray_img, _percent=(0.001, 0.6))
+        img_auto_thr = self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
 
         # For comparision
         def threshold_bin(img, _threshold=10):
             ret, retimg = cv2.threshold(img, _threshold, 255, cv2.THRESH_BINARY)
             return retimg
-        self._add_tune_step(threshold_bin, gray_img, _threshold=(0, 255))
+        self._add_tune_step(threshold_bin, img_gray, _threshold=(0, 255))
 
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
         def morphopen(img, _kernel=43):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        _img = self._add_tune_step(morphopen, img_auto_thr, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphopen, img_auto_thr, _kernel=(1, 100, 2))
+
+        def morphclose(img, _kernel=73):
+            mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
+        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
+
+        def mediumblur(img, _blur=5):
+            return cv2.medianBlur(img, _blur)
+        img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2))
+
+        _, contours, hierarchy = cv2.findContours(img_, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        largest_contour = find_largest_contour(img_)
+        x_, y_, w_, h_ = cv2.boundingRect(largest_contour)
+        if w_ == 0 or h_ == 0:
+            self.logger.warning('find boundingRect failed, w=%d, h=%d', w_, h_)
+            return None, None, None
 
 
 def find_main_object(img,

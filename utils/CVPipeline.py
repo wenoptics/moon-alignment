@@ -82,12 +82,22 @@ class CVStep:
                 self.logger.debug('initial value of "%s" override to %s', k, v)
                 tuninginitvalues[k] = v
 
-        # Delete not used tunes
-        for k in list(tunes.keys()):  # make a dict copy
-            if k not in [param.name for param in tuningparams]:
-                self.logger.warning('tuning param "%s" not found in tuning target `%s`, ignored.', k,
-                                    self.handler.__name__)
+        # # Delete not used tunes
+        # for k in list(tunes.keys()):  # make a dict copy
+        #     if k not in [param.name for param in tuningparams]:
+        #         self.logger.warning('tuning param "%s" not found in tuning target `%s`, ignored.', k,
+        #                             self.handler.__name__)
+        #         del tunes[k]
+
+        for k,v in list(tunes.items()):
+            if type(v) is not tuple or len(v) < 2:
+                self.logger.warning('param "%s" doesnt seem like valid tuning param setting for target `%s`, ignored.', k,
+                                     self.handler.__name__)
                 del tunes[k]
+            if k not in [param.name for param in tuningparams]:
+                raise ValueError('Param tuning setting "{0}" doesnt have a related param in `{1}`. '
+                                 'Did you forget to set an init value in `{1}`?'
+                                 .format(k, self.handler.__name__))
 
         # Create trackbars
         for paramname, paramsetting in tunes.items():
@@ -159,11 +169,12 @@ class CVPipeline:
         self._current_input = ()
 
         self._currentstep = 0
+        self._timesrun = 0
         self._tk = tkinter.Tk()
         self._should_create_tuneui = False
-        self._flag_update_only = False
-        self.__doaftercancel = None
+        self._load_steps_only = False
         self._suppress_preview = False
+        self.__doaftercancel = None
 
     @property
     def config_url(self):
@@ -186,49 +197,67 @@ class CVPipeline:
         """
         raise NotImplementedError('You should implement your own pipeline here')
 
-    def load_pipeline_quite(self, *inputargs):
-        self._flag_update_only = False
-        self._suppress_preview = True
-        self._should_create_tuneui = False
-        self._currentstep = 0
-        if len(inputargs) == 0:
-            import numpy as np
-            h, w = 1, 1
-            blank_image = np.zeros((h, w, 3), np.uint8)
-            inputargs = (blank_image)
-        return self._pipeline(*inputargs)
+    # def load_pipeline_quite(self, *inputargs):
+    #     self._load_steps_only = False
+    #     self._suppress_preview = True
+    #     self._should_create_tuneui = False
+    #     if len(inputargs) == 0:
+    #         # Default to pass a 1x1 dummy image
+    #         import numpy as np
+    #         h, w = 1, 1
+    #         blank_image = np.zeros((h, w, 3), np.uint8)
+    #         inputargs = (blank_image)
+    #     return self.__run(*inputargs)
 
     def run_pipeline_tuning(self, *inputargs):
         """Run pipeline tuning. Will try to read the params from the config file"""
         self._current_input = inputargs
         self._should_create_tuneui = True
-        self._flag_update_only = False
+        self._load_steps_only = False
         self._suppress_preview = False
-        self._currentstep = 0
-        self._create_common_gui()
 
-        self._retval = self._pipeline(*inputargs)
+        self._create_common_gui()
+        # First run to create trackbar ui etc.
+        self._retval = self.__run(*inputargs)
+
         # Block until tune window closed
         self._tk.mainloop()
         return self._retval
 
     def run_pipeline_final(self, *inputargs):
         """Run the tuned, final pipeline. Will try to read the params from the config file"""
-        self._should_create_tuneui = False
-        self._flag_update_only = True
-        self._currentstep = 0
+        if self._timesrun == 0:
+            # This is the first time to run, load steps first.
+            self._load_steps_only = False
+        else:
+            # Steps are already loaded, we won't create new steps, just load them
+            self._load_steps_only = True
         self._suppress_preview = True
-        return self._pipeline(*inputargs)
+        return self.__run(*inputargs)
 
     def _run_pipeline_update(self):
         """re-run pipeline, only for updating values(tuning params)"""
         assert len(self.steps) > 0
+        self._load_steps_only = True
+        self._should_create_tuneui = False
         # Skip blink when initializing sliders
         self.__doaftercancel = None
+        self._retval = self.__run(*self._current_input)
+
+    def __run(self, *inputargs):
+        self._pre_pipeline()
+        self._retval = self._pipeline(*inputargs)
+        self._post_pipeline()
+        return self._retval
+
+    def _pre_pipeline(self):
+        if self._load_steps_only:
+            if self._should_create_tuneui:
+                raise ValueError('_should_create_tuneui will not have effect when _load_steps_only set')
         self._currentstep = 0
-        self._should_create_tuneui = False
-        self._flag_update_only = True
-        self._retval = self._pipeline(*self._current_input)
+
+    def _post_pipeline(self):
+        self._timesrun += 1
 
     def _create_common_gui(self):
         self._tk.title(self.pipelinename)
@@ -271,7 +300,7 @@ class CVPipeline:
         return config
 
     def _add_tune_step(self, handler, *directargs, show_preview=True, **kwargs):
-        if self._flag_update_only:
+        if self._load_steps_only:
             # Load step from memory
             try:
                 step = self.steps[self._currentstep]
