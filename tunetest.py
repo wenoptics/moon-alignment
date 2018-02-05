@@ -6,7 +6,12 @@ import cv2
 from find import FindMainObject
 
 
-img_ori = cv2.imread('E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01425.jpg')
+img_ori = cv2.imread(
+    # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01425.jpg'
+    'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01325.jpg'
+    # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01367.jpg'
+    # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01332.jpg'
+)
 t = FindMainObject(force_resize_preview_w=500)
 
 # t.run_pipeline_final(img_ori)

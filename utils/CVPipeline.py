@@ -45,6 +45,10 @@ class CvWindowArranger:
     def get_windows_position(self, winname):
         return self._windows.get(winname)
 
+    def remove_window(self):
+        # todo
+        pass
+
 
 class CVPreviewStep:
     def __init__(self, from_pipeline: 'CVPipeline', n: int):
@@ -58,6 +62,12 @@ class CVPreviewStep:
             return
 
         _winname = '[{}]{}'.format(self.stepn, self.stepname)
+
+        if img is None:
+            self.logger.warning('image in CVPreviewStep "%s" is None, will not show', self.stepname)
+            cv2.destroyWindow(_winname)
+            self.frompipeline.preview_window_arranger.remove_window(_winname)
+            return
 
         # Resize preview image
         if self.frompipeline.force_resize_preview_w > 0:
@@ -290,7 +300,6 @@ class CVPipeline:
 
     def __run_pipeline_update(self):
         """re-run pipeline, only for updating values(tuning params)"""
-        assert len(self.steps) > 0
         self._should_create_tuneui = False
         # Skip blink when initializing sliders
         self.__doaftercancel = None
@@ -344,6 +353,8 @@ class CVPipeline:
         fn = self.config_url
         config = configparser.ConfigParser()
         for step in self.steps.values():
+            if not isinstance(step, CVStep):
+                continue
             sect = step.handler.__name__
             if not config.has_section(sect):
                 config.add_section(sect)
@@ -367,19 +378,17 @@ class CVPipeline:
         #         step.valuedict[k].set(value_)
         return config
 
-    def __load_step(self, handler):
-        k = handler.__name__
+    def __load_step(self, k):
         return self.steps.get(k)
 
-    def __add_step(self, handler, step):
-        k = handler.__name__
+    def __add_step(self, k, step):
         if k in self.steps.keys():
-            raise RuntimeError('handler with name "{}" already add.'.format(k))
+            raise RuntimeError('step "{}" already added.'.format(k))
         self.steps[k] = step
 
     def _add_tune_step(self, handler, *directargs, show_preview=True, **kwargs):
         # Try to load step first
-        step = self.__load_step(handler)
+        step = self.__load_step(handler.__name__)
 
         if step is None:
             # Step not found, new one
@@ -406,7 +415,7 @@ class CVPipeline:
             step.init_tune_params(**kwargs, initoverride=initoverride)
 
             # Save step info
-            self.__add_step(handler, step)
+            self.__add_step(handler.__name__, step)
             self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
 
         assert step.stepn == self._currentstep
@@ -427,23 +436,21 @@ class CVPipeline:
         self._currentstep += 1
         return ret
 
-    # def _add_debug_view(self, winname, img):
-    #     if self._load_steps_only:
-    #         # Load step from memory
-    #         try:
-    #             step = self.steps[self._currentstep]
-    #         except IndexError:
-    #             raise Exception('This step is not loaded yet. Did you call _run_pipeline_update before load steps?')
-    #     else:
-    #         step = CVPreviewStep(self, self._currentstep)
-    #         step.stepname = winname
-    #         self.steps.append(step)
-    #     step.show(img)
-    #     if not self._suppress_ui:
-    #         self._uiprogressbar['value'] = self._currentstep+1
-    #         # self._uiprogressbar.step()
-    #         self._tk.update_idletasks()
-    #     self._currentstep += 1
+    def _add_debug_view(self, winname, img):
+        # Try to load step first
+        step = self.__load_step(winname)
+
+        if step is None:
+            # Step not found, new one
+            step = CVPreviewStep(self, self._currentstep)
+            step.stepname = winname
+            self.__add_step(winname, step)
+        step.show(img)
+        if not self._suppress_ui:
+            self._uiprogressbar['value'] = self._currentstep+1
+            # self._uiprogressbar.step()
+            self._tk.update_idletasks()
+        self._currentstep += 1
 
 
 if __name__ == '__main__':

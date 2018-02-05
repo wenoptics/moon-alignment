@@ -2,26 +2,10 @@ import logging
 
 import cv2
 
-from find import find_circle, find_main_object
+from find import FindMainObject, FindCircle
 from utils.util import Tuning
 
 logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
-
-
-def tune_find_circle(img):
-    t = Tuning(find_circle, img,
-                  # valMedianBlur=(1, 30, 2),
-                  valKernelOpen=(1, 100, 2),
-                  valKernelClose=(1, 100, 2),
-                  valHoughParam1=(1, 300),
-                  valHoughParam2=(1, 300),
-                  valHoughMinDist=(1, 1000),
-                  valAdaptiveThreshold=(0,255),
-                  valBlfColor=(0, 1250),
-                  valBlfSpace=(0, 1250),
-                  valBlfD=(0, 30),
-                  )
-    return t.run()
 
 
 if __name__ == '__main__':
@@ -43,5 +27,5 @@ if __name__ == '__main__':
     )
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.1, fy=0.1)
     print('origin img.shape={}'.format(ori_img.shape))
-    roi, x, y = find_main_object(ori_img, show_debug_preview=False)
-    tune_find_circle(roi)
+    roi, x, y = FindMainObject().run_pipeline_final(ori_img)
+    FindCircle().run_pipeline_tuning(roi)

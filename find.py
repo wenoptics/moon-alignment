@@ -70,17 +70,63 @@ class FindCircle(CVPipeline):
             return cv2.bilateralFilter(img, _d, _sigmacolor, _sigmaspace)
         img_ = self._add_tune_step(biltfilter, img_, _d=(0, 30), _sigmacolor=(0, 1250), _sigmaspace=(0, 1250))
 
-        # padding = int(self.NORM_WIDTH / 20)
-        # img_ = padding_img = cv2.copyMakeBorder(img, padding, padding, padding, padding, cv2.BORDER_CONSTANT,
-        #                                         value=[0, 0, 0])
+        padding = int(self.NORM_WIDTH / 20)
+        img_ = img_gray = cv2.copyMakeBorder(img_, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+        img_scaled = cv2.copyMakeBorder(img_scaled, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
         def medianblur(img, _blur=19):
             return cv2.medianBlur(img, _blur)
         img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
 
+        _, img_otsu = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self._add_debug_view('otsu threshold', img_otsu)
 
+        # MORPH_OPEN is erosion followed by dilation,
+        #   eliminate noise outside the target
+        def morphopen(img, _kernel=3):
+            mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
+        img_ = self._add_tune_step(morphopen, img_otsu, _kernel=(1, 100, 2))
 
+        # Eliminate the noise inside
+        def morphclose(img, _kernel=85):
+            mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
+        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
 
+        img_ = cv2.addWeighted(img_gray, 0.05, img_, 1, 0)
+
+        def h_circle(img, img_ori, _min_dist=900, _param1=47, _param2=6):
+            circles = cv2.HoughCircles(img.copy(), cv2.HOUGH_GRADIENT, 1,
+                                       minDist=_min_dist, param1=_param1, param2=_param2,
+                                       minRadius=int(self.NORM_WIDTH / 2 - self.NORM_WIDTH * 0.3),
+                                       maxRadius=int(self.NORM_WIDTH / 2 + self.NORM_WIDTH * 0.1))
+            if circles is None:
+                logger.warning('No circle found')
+                return None, None
+            draw_circles = np.uint16(np.around(circles))
+            img_draw = img_ori.copy()
+            for i in draw_circles[0, :]:
+                # Draw the outer circle
+                cv2.circle(img_draw, (i[0], i[1]), i[2], (0, 255, 0), 1)
+                # Draw the center of the circle
+                cv2.circle(img_draw, (i[0], i[1]), 2, (0, 0, 255), 1)
+            return img_draw, circles
+        _, circles = self._add_tune_step(h_circle, img_, img_scaled, _min_dist=(1, 1000), _param1=(1, 300), _param2=(1, 300))
+
+        ret = []
+        if circles is None:
+            return []
+        for i in circles[0, :]:
+            # Scale the circle back to ori size
+            x = int((i[0] - padding) / factor)
+            y = int((i[1] - padding) / factor)
+            r = int((i[2]) / factor)
+
+            ret.append(Circle(x, y, r))
+        return ret
+
+'''
 def find_circle(img,
                 valMedianBlur=19,
                 valKernelOpen=3,
@@ -198,6 +244,7 @@ def find_circle(img,
     # cv2.imwrite("1.jpg", img)
     if show_debug_preview: cv2.imshow(win_HoughCircles, img)
     return ret
+'''
 
 
 def find_largest_contour(bin_img):
@@ -277,9 +324,9 @@ class FindMainObject(CVPipeline):
             return retimg
         self._add_tune_step(threshold_bin, img_gray, _threshold=(0, 255))
 
-        # # For comparision
-        # _, img_otsu = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        # self._add_debug_view('otsu threshold', img_otsu)
+        # For comparision
+        _, img_otsu = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self._add_debug_view('otsu threshold', img_otsu)
 
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
@@ -288,6 +335,7 @@ class FindMainObject(CVPipeline):
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
         img_ = self._add_tune_step(morphopen, img_auto_thr, _kernel=(1, 100, 2))
 
+        # Eliminate the noise inside
         def morphclose(img, _kernel=73):
             mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
@@ -304,106 +352,20 @@ class FindMainObject(CVPipeline):
             self.logger.warning('find boundingRect failed: w=%d, h=%d', w_, h_)
             return None, None, None
 
+        # img_1 = img.copy()
+        # cv2.drawContours(img_1, contours, -1, (0, 255, 0), 3)
+        # self._add_debug_view('find_main_object.drawContours', img_1[y_:y_ + h_, x_:x_ + w_])
+        #
+        # img_2 = img.copy()
+        # ellipse = cv2.fitEllipse(largest_contour)
+        # img_2 = cv2.ellipse(img_2, ellipse, (0, 255, 0), 3)
+        # self._add_debug_view('find_main_object.fitEllipse', img_2[y_:y_ + h_, x_:x_ + w_])
+
         roi = img[y_:y_ + h_, x_:x_ + w_]
-        # self._add_debug_view('roi', roi)
+        self._add_debug_view('roi', roi)
 
         logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
         return roi, x_, y_
-
-
-'''
-def find_main_object(img,
-                     _kernelOpen=43,
-                     _kernelClose=73,
-                     _medianBlur=5,
-                     _threshold=10,
-                     ):
-    """Find the main object (a circle) in img"""
-    previewwin_w = 500
-
-
-    masked = img
-    gray_img = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
-
-    # # create a CLAHE object (Arguments are optional).
-    # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    # gray_img = clahe.apply(gray_img)
-    # if show_debug_preview: cv2.imshow('find_main_circle.clahe', resize_bin(gray_img, previewwin_w))
-    gray_img_ = gray_img.copy()
-
-    # gray_img = adp_thresh_bin(gray_img, valAdaptiveThreshold1)
-    # if show_debug_preview: cv2.imshow('find_main_circle.adp_thresh_bin1', resize_bin(gray_img, previewwin_w))
-
-    # Find a suitable threshold from histogram
-    majorblack = find_black_drop(gray_img, 0.05)
-    logger.debug('majorblack==%d', majorblack)
-    ret, gray_img = cv2.threshold(gray_img, majorblack, 255, cv2.THRESH_BINARY)
-    if show_debug_preview: cv2.imshow('find_main_circle.majorblack', resize(gray_img, previewwin_w))
-
-    ret, test_view = cv2.threshold(gray_img_, _threshold, 255, cv2.THRESH_BINARY)
-    if show_debug_preview: cv2.imshow('find_main_circle.valThr'.format(_threshold), resize(test_view, previewwin_w))
-
-    # gray_img = cv2.adaptiveThreshold(gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C ,
-    #                                  cv2.THRESH_BINARY, blockSize=valAdpBSize, C=valAdpC)
-    # if show_debug_preview:
-    #     cv2.imshow('find_main_circle.adaptiveThreshold', resize_bin(gray_img, previewwin_w))
-
-    # MORPH_OPEN is erosion followed by dilation,
-    #   eliminate noise outside the target
-    mopen_kernel = np.ones((_kernelOpen, _kernelOpen), np.uint8)
-    gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_OPEN, mopen_kernel)
-    if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_OPEN', resize(gray_img, previewwin_w))
-
-    # Eliminate the noise inside
-    mclose_kernel = np.ones((_kernelClose, _kernelClose), np.uint8)
-    gray_img = cv2.morphologyEx(gray_img, cv2.MORPH_CLOSE, mclose_kernel)
-    if show_debug_preview:
-        cv2.imshow('find_main_circle.MORPH_CLOSE', resize(gray_img, previewwin_w))
-
-    pimg = cv2.medianBlur(gray_img, _medianBlur)
-    if show_debug_preview:
-        cv2.imshow('find_main_circle.medianBlur', resize(pimg, previewwin_w))
-
-    # gray_img = adp_thresh_bin(pimg, valAdaptiveThreshold2)
-    # if show_debug_preview:
-    #     cv2.imshow('find_main_circle.adp_thresh_bin2', resize_bin(gray_img, previewwin_w))
-
-    image, contours, hierarchy = cv2.findContours(gray_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    largest_contour = find_largest_contour(gray_img)
-    x, y, w, h = cv2.boundingRect(largest_contour)
-
-    if w == 0 or h == 0:
-        logger.warning('in find_main_object(), find boundingRect failed, w=%d, h=%d', w, h)
-        return None, None, None
-
-    if show_debug_preview:
-        img_1 = img.copy()
-        cv2.drawContours(img_1, contours, -1, (0, 255, 0), 3)
-        cv2.imshow('find_main_object.drawContours', resize(img_1, previewwin_w * 2))
-
-        try:
-            img_2 = img.copy()
-            ellipse = cv2.fitEllipse(largest_contour)
-            img_2 = cv2.ellipse(img_2, ellipse, (0, 255, 0), 3)
-            cv2.imshow('find_main_object.fitEllipse', resize(img_2, previewwin_w * 2))
-        except:
-            cv2.destroyWindow('find_main_object.fitEllipse')
-            logger.exception('failed to fitEllipse')
-
-        # img_3 = img.copy()
-        # img_3 = cv2.rectangle(img_3, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        # cv2.imshow('findContours.boundingRect', resize(img_3, previewwin_w*2))
-
-    roi = img[y:y + h, x:x + w]
-    if show_debug_preview:
-        cv2.imshow('roi', roi)
-
-    logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x, y, w, h))
-
-    return roi, x, y
-'''
 
 
 def draw_moon(img, moon: Circle):
@@ -413,6 +375,7 @@ def draw_moon(img, moon: Circle):
 
 
 f0 = FindMainObject()
+f1 = FindCircle()
 
 
 def find_moon(img) -> Circle:
@@ -420,8 +383,8 @@ def find_moon(img) -> Circle:
     if roi is None:
         logger.error('Failed to locate a main object, aborted.')
         return None
-    circles = find_circle(roi, show_debug_preview=False)
 
+    circles = f1.run_pipeline_final(roi)
     if not circles:
         return None
 
