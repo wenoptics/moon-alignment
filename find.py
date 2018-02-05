@@ -269,8 +269,15 @@ class FindMainObject(CVPipeline):
         largest_contour = find_largest_contour(img_)
         x_, y_, w_, h_ = cv2.boundingRect(largest_contour)
         if w_ == 0 or h_ == 0:
-            self.logger.warning('find boundingRect failed, w=%d, h=%d', w_, h_)
+            self.logger.warning('find boundingRect failed: w=%d, h=%d', w_, h_)
             return None, None, None
+
+        roi = img[y_:y_ + h_, x_:x_ + w_]
+        self._add_debug_view('roi', roi)
+
+        logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
+
+        return roi, x_, y_
 
 
 def find_main_object(img,
