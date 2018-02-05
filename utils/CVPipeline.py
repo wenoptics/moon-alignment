@@ -6,7 +6,7 @@ import os
 
 import cv2
 
-from utils.util import SteppedIntVar, resize
+from utils.util import SteppedIntVar, resize, isCvWindowsExists
 
 
 class CVStep:
@@ -42,7 +42,7 @@ class CVStep:
         return vd
 
     def apply_values(self):
-        """Apply tuning value to the target handler."""
+        """Apply tuning value to the target handler. And show the preview if need to"""
         vd = self.get_actual_valuedict()
         self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
         ret = self.handler.__call__(*self.directargs, **vd)
@@ -50,10 +50,30 @@ class CVStep:
         if self.show_preview and not self.frompipeline._suppress_preview:
             img = ret[0] if type(ret) is tuple else ret
             _winname = '[{}]{}'.format(self.stepn, self.handler.__name__)
+
+            # Resize preview image
             if self.frompipeline.force_resize_preview_w > 0:
                 img = resize(img, self.frompipeline.force_resize_preview_w)
                 _winname += '(resized)'
+            is_existed = isCvWindowsExists(_winname)
             cv2.imshow(_winname, img)
+
+            def get_win_position(index) -> (int, int):
+                PADDING_LEFT = 10; PADDING_TOP = 10
+                GAP_LEFT = 0; GAP_TOP = 20
+                imgw, imgh = img.shape[1], img.shape[0]
+                scrw, scrh = self.frompipeline._tk.winfo_screenwidth(), self.frompipeline._tk.winfo_screenheight()
+                NX = (scrw - PADDING_LEFT) // (imgw + GAP_LEFT)
+                ix = index % NX
+                iy = index // NX
+                x = ix * (imgw + GAP_LEFT) + PADDING_LEFT
+                y = iy * (imgh + GAP_TOP) + PADDING_TOP
+                return x, y
+
+            # Arrange the window... when open many windows, it gets so messy
+            if not is_existed:
+                # Don't arrange the window if user have move it..
+                cv2.moveWindow(_winname, *get_win_position(self.stepn))
 
         return ret
 

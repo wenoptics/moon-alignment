@@ -8,15 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 def resize(img, dst_width):
-    l = len(img.shape)
-    if l == 3:
-        h, w, _ = img.shape
-    elif l == 2:
-        h, w = img.shape
-    else:
-        raise ValueError
+    w, h = img.shape[1], img.shape[0]
     factor = dst_width / w
     return cv2.resize(img, (0, 0), fx=factor, fy=factor)
+
+
+def isCvWindowsExists(winname) -> bool:
+    return cv2.getWindowProperty(winname, 0) >= 0
 
 
 class SteppedIntVar(tkinter.IntVar):
