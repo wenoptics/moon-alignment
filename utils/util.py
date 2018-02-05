@@ -17,6 +17,13 @@ def isCvWindowsExists(winname) -> bool:
     return cv2.getWindowProperty(winname, 0) >= 0
 
 
+def parse_number(s: str):
+    """Return int or float"""
+    if '.' in s:
+        return float(s)
+    return int(s)
+
+
 class SteppedIntVar(tkinter.IntVar):
     """A stepped characteristic interval variable (a hack for tkinter.IntVar)"""
 

@@ -16,20 +16,9 @@ class Circle():
         self.x = x
 
 
-# Normalize image
-NORM_WIDTH = 500
 
 
-def scale_to_normal(img):
-    h, w, _ = img.shape
-    if w < NORM_WIDTH:
-        logger.warning('input image has size(w={}) smaller than normailize size(w={})'.format(w, NORM_WIDTH))
 
-    factor = NORM_WIDTH / w
-    if factor < 0.5:
-        logger.warning('The ratio is too small (%.2f), may not produce the correct detection. (is the moon too small?)',
-                       factor)
-    return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
 
 
 def adp_thresh_bin(gray, thr=250):
@@ -52,6 +41,44 @@ def auto_canny(image, sigma=0.33):
 
     # return the edged image
     return edged
+
+
+class FindCircle(CVPipeline):
+
+    # Normalize image
+    NORM_WIDTH = 500
+
+    def scale_to_normal(self, img):
+        h, w, _ = img.shape
+        if w < self.NORM_WIDTH:
+            logger.warning('input image has size(w={}) smaller than normailize size(w={})'.format(w, self.NORM_WIDTH))
+
+        factor = self.NORM_WIDTH / w
+        if factor < 0.5:
+            logger.warning(
+                'The ratio is too small (%.2f), may not produce the correct detection. (is the moon too small?)',
+                factor)
+        return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
+
+    def _pipeline(self, *inputargs):
+        img = inputargs[0]
+
+        img_scaled, factor = self.scale_to_normal(img)
+        img_ = cv2.cvtColor(img_scaled, cv2.COLOR_BGR2GRAY)
+
+        def biltfilter(img, _d=15, _sigmacolor=750, _sigmaspace=750):
+            return cv2.bilateralFilter(img, _d, _sigmacolor, _sigmaspace)
+        img_ = self._add_tune_step(biltfilter, img_, _d=(0, 30), _sigmacolor=(0, 1250), _sigmaspace=(0, 1250))
+
+        # padding = int(self.NORM_WIDTH / 20)
+        # img_ = padding_img = cv2.copyMakeBorder(img, padding, padding, padding, padding, cv2.BORDER_CONSTANT,
+        #                                         value=[0, 0, 0])
+
+        def medianblur(img, _blur=19):
+            return cv2.medianBlur(img, _blur)
+        img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
+
+
 
 
 def find_circle(img,
@@ -174,6 +201,7 @@ def find_circle(img,
 
 
 def find_largest_contour(bin_img):
+    """Find and return the contour that has the largest area"""
     image, contours, hierarchy = cv2.findContours(bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     largest_contour = None
@@ -249,6 +277,10 @@ class FindMainObject(CVPipeline):
             return retimg
         self._add_tune_step(threshold_bin, img_gray, _threshold=(0, 255))
 
+        # # For comparision
+        # _, img_otsu = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        # self._add_debug_view('otsu threshold', img_otsu)
+
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
         def morphopen(img, _kernel=43):
@@ -273,12 +305,13 @@ class FindMainObject(CVPipeline):
             return None, None, None
 
         roi = img[y_:y_ + h_, x_:x_ + w_]
-        self._add_debug_view('roi', roi)
+        # self._add_debug_view('roi', roi)
 
         logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
         return roi, x_, y_
 
 
+'''
 def find_main_object(img,
                      _kernelOpen=43,
                      _kernelClose=73,
@@ -370,6 +403,7 @@ def find_main_object(img,
     logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x, y, w, h))
 
     return roi, x, y
+'''
 
 
 def draw_moon(img, moon: Circle):
@@ -378,8 +412,11 @@ def draw_moon(img, moon: Circle):
     cv2.circle(img, (moon.x, moon.y), 5, (0, 0, 255), 1)
 
 
+f0 = FindMainObject()
+
+
 def find_moon(img) -> Circle:
-    roi, rx, ry = find_main_object(img, show_debug_preview=False)
+    roi, rx, ry = f0.run_pipeline_final(img)
     if roi is None:
         logger.error('Failed to locate a main object, aborted.')
         return None

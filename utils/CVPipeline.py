@@ -7,7 +7,7 @@ import os
 
 import cv2
 
-from utils.util import SteppedIntVar, resize, isCvWindowsExists
+from utils.util import SteppedIntVar, resize, isCvWindowsExists, parse_number
 
 
 class CvWindowArranger:
@@ -87,7 +87,6 @@ class CVStep(CVPreviewStep):
         self.directargs = directargs
         self.show_preview = show_preview
 
-        self._uiprogressbar = None
         self.__doaftercancel = None
         self.__cb = (None, (), {})
 
@@ -104,7 +103,10 @@ class CVStep(CVPreviewStep):
     def get_actual_valuedict(self):
         vd = dict(self.valuedict)  # Make a copy
         for k, v in self.valuedict.items():
-            vd[k] = v.get()
+            if isinstance(v, tkinter.Variable):
+                vd[k] = v.get()
+            else:
+                vd[k] = v
         return vd
 
     def apply_values(self):
@@ -154,33 +156,42 @@ class CVStep(CVPreviewStep):
                                  'Did you forget to set an init value in `{1}`?'
                                  .format(k, self.handler.__name__))
 
-        # Create trackbars
+        # Parse tune param settings
         for paramname, paramsetting in tunes.items():
             start_ = paramsetting[0]
             end_ = paramsetting[1]
             step_ = paramsetting[2] if len(paramsetting) > 2 else 1
             initval = tuninginitvalues[paramname]
-            type_set = {type(start_), type(end_), type(step_), type(initval)}
-            type_ = float if float in type_set else int
+            _ = {type(start_), type(end_), type(step_), type(initval)}
+            type_ = float if float in _ else int
             if step_ != 1:
-                # use SteppedIntVar
-                assert step_ > 0
-                dynvar = SteppedIntVar(starting=start_, step=step_, value=initval)
                 type_ = int
-            else:
-                dynvar = tkinter.DoubleVar(value=initval)
-            self.valuedict[paramname] = dynvar
+            self.valuedict[paramname] = initval
             self.paramsettingdict[paramname] = {
                 'from': start_,
                 'to': end_,
                 'step': step_,
-                'dynvar': dynvar,
-                'type': type_
+                'type': type_,
+                'init': initval,
+                'dynval': None
             }
 
     def create_tune_trackbars(self, tk):
         """Please make sure you have called init_tune_params() before this"""
         for paramname, v in self.paramsettingdict.items():
+
+            if v['step'] != 1:
+                # use SteppedIntVar
+                assert v['step'] > 0
+                dynvar = SteppedIntVar(starting=v['from'], step=v['step'], value=v['init'], master=tk)
+            elif v['type'] is int:
+                dynvar = tkinter.IntVar(value=v['init'], master=tk)
+            else:
+                dynvar = tkinter.DoubleVar(value=v['init'], master=tk)
+
+            # Since we will use trackbar, use dynamic variables (overrides original value)
+            self.valuedict[paramname] = dynvar
+            v['dynvar'] = dynvar
 
             def _trackbar_callback(_):
                 # print('trackbar value changed in step ', self.stepn)
@@ -195,7 +206,7 @@ class CVStep(CVPreviewStep):
             if v['type'] is float:
                 resolution_ = {'resolution': (v['to'] - v['from']) / 100}
             trackbar = tkinter.Scale(tk,
-                                     from_=v['from'], to=v['to'], variable=v['dynvar'], label=paramname,
+                                     from_=v['from'], to=v['to'], variable=dynvar, label=paramname,
                                      command=_trackbar_callback, orient=tkinter.HORIZONTAL, length=500, **resolution_)
             trackbar.pack()
             self.logger.debug('trackbar for "%s" created', paramname)
@@ -218,18 +229,18 @@ class CVPipeline:
         self.configpath = './'
         self.logger = logging.getLogger(self.__class__.__name__)
         self.savedconfig = self.load_tuning()
-        self.steps = []
+        self.steps = {}
         # initialize in GUI init
         self.preview_window_arranger = None
+        self._tk = None
 
         self._retval = None
         self._current_input = ()
 
+        self._uiprogressbar = None
         self._currentstep = 0
         self._timesrun = 0
-        self._tk = tkinter.Tk()
         self._should_create_tuneui = False
-        self._load_steps_only = False
         self._suppress_ui = False
         self.__doaftercancel = None
 
@@ -262,10 +273,9 @@ class CVPipeline:
         """
         self._current_input = inputargs
         self._should_create_tuneui = True
-        self._load_steps_only = False
         self._suppress_ui = False
 
-        self.__create_common_gui()
+        self.__create_gui()
         # First run to create trackbar ui etc.
         self._retval = self.__run(*inputargs)
 
@@ -275,19 +285,12 @@ class CVPipeline:
 
     def run_pipeline_final(self, *inputargs):
         """Run the tuned, final pipeline. Will try to read the params from the config file"""
-        if self._timesrun == 0:
-            # This is the first time to run, load steps first.
-            self._load_steps_only = False
-        else:
-            # Steps are already loaded, we won't create new steps, just load them
-            self._load_steps_only = True
         self._suppress_ui = True
         return self.__run(*inputargs)
 
     def __run_pipeline_update(self):
         """re-run pipeline, only for updating values(tuning params)"""
         assert len(self.steps) > 0
-        self._load_steps_only = True
         self._should_create_tuneui = False
         # Skip blink when initializing sliders
         self.__doaftercancel = None
@@ -300,9 +303,6 @@ class CVPipeline:
         return self._retval
 
     def _pre_pipeline(self):
-        if self._load_steps_only:
-            if self._should_create_tuneui:
-                raise ValueError('_should_create_tuneui=True will not have effect when _load_steps_only set')
         if self._suppress_ui is True and self._should_create_tuneui is True:
             raise ValueError('`_suppress_ui` and `_should_create_tuneui` should NOT be True at the same time')
         self._currentstep = 0
@@ -317,8 +317,9 @@ class CVPipeline:
         if not self._suppress_ui:
             self._uiprogressbar.stop()
 
-    def __create_common_gui(self):
-        assert self._suppress_ui == False
+    def __create_gui(self):
+        assert self._suppress_ui is False
+        self._tk = tkinter.Tk()
         screenw = self._tk.winfo_screenwidth()
         self.preview_window_arranger = CvWindowArranger(screenw)
 
@@ -342,9 +343,10 @@ class CVPipeline:
         """Save tuning setting to file"""
         fn = self.config_url
         config = configparser.ConfigParser()
-        for step in self.steps:
+        for step in self.steps.values():
             sect = step.handler.__name__
-            config.add_section(sect)
+            if not config.has_section(sect):
+                config.add_section(sect)
             vd = step.get_actual_valuedict()
             for k, v in vd.items():
                 print('setting config:', step.handler.__name__, k, str(v))
@@ -355,7 +357,7 @@ class CVPipeline:
     def load_tuning(self) -> configparser.ConfigParser:
         fn = self.config_url
         config = configparser.ConfigParser()
-        if os.path.isfile(fn):
+        if not os.path.isfile(fn):
             return config
         config.read(fn)
         self.logger.info('loading tuning config file from "%s"', fn)
@@ -365,15 +367,22 @@ class CVPipeline:
         #         step.valuedict[k].set(value_)
         return config
 
-    def _add_tune_step(self, handler, *directargs, show_preview=True, **kwargs):
-        if self._load_steps_only:
-            # Load step from memory
-            try:
-                step = self.steps[self._currentstep]
-            except IndexError:
-                raise Exception('This step is not loaded yet. Did you call _run_pipeline_update before load steps?')
+    def __load_step(self, handler):
+        k = handler.__name__
+        return self.steps.get(k)
 
-        else:
+    def __add_step(self, handler, step):
+        k = handler.__name__
+        if k in self.steps.keys():
+            raise RuntimeError('handler with name "{}" already add.'.format(k))
+        self.steps[k] = step
+
+    def _add_tune_step(self, handler, *directargs, show_preview=True, **kwargs):
+        # Try to load step first
+        step = self.__load_step(handler)
+
+        if step is None:
+            # Step not found, new one
             step = CVStep(self, self._currentstep,
                           handler, *directargs, show_preview=show_preview)
 
@@ -390,20 +399,23 @@ class CVPipeline:
             initoverride = {}
             sect = handler.__name__
             if self.savedconfig.has_section(sect):
-                for k, v in kwargs.items():
+                for k in kwargs.keys():
                     if self.savedconfig.has_option(sect, k):
-                        initoverride[k] = self.savedconfig.get(sect, k)
+                        v = self.savedconfig.get(sect, k)
+                        initoverride[k] = parse_number(v)
             step.init_tune_params(**kwargs, initoverride=initoverride)
 
-            if self._should_create_tuneui and not self._suppress_ui:
-                labelframe = tkinter.LabelFrame(self._tk, text='[{}] {}'.format(self._currentstep, handler.__name__))
-                labelframe.pack(expand="yes")
-
-                step.create_tune_trackbars(labelframe)
-
             # Save step info
-            self.steps.append(step)
+            self.__add_step(handler, step)
             self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
+
+        assert step.stepn == self._currentstep
+
+        # Check if we have to create some ui here
+        if self._should_create_tuneui and not self._suppress_ui:
+            labelframe = tkinter.LabelFrame(self._tk, text='[{}] {}'.format(self._currentstep, handler.__name__))
+            labelframe.pack(expand="yes")
+            step.create_tune_trackbars(labelframe)
 
         ret = step.apply_values()
 
@@ -415,11 +427,23 @@ class CVPipeline:
         self._currentstep += 1
         return ret
 
-    def _add_debug_view(self, winname, img):
-        s = CVPreviewStep(self, self._currentstep)
-        s.stepname = winname
-        self._currentstep += 1
-        s.show(img)
+    # def _add_debug_view(self, winname, img):
+    #     if self._load_steps_only:
+    #         # Load step from memory
+    #         try:
+    #             step = self.steps[self._currentstep]
+    #         except IndexError:
+    #             raise Exception('This step is not loaded yet. Did you call _run_pipeline_update before load steps?')
+    #     else:
+    #         step = CVPreviewStep(self, self._currentstep)
+    #         step.stepname = winname
+    #         self.steps.append(step)
+    #     step.show(img)
+    #     if not self._suppress_ui:
+    #         self._uiprogressbar['value'] = self._currentstep+1
+    #         # self._uiprogressbar.step()
+    #         self._tk.update_idletasks()
+    #     self._currentstep += 1
 
 
 if __name__ == '__main__':
