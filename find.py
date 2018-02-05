@@ -276,7 +276,6 @@ class FindMainObject(CVPipeline):
         self._add_debug_view('roi', roi)
 
         logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
-
         return roi, x_, y_
 
 

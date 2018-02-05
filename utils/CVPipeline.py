@@ -2,6 +2,7 @@ import configparser
 import inspect
 import logging
 import tkinter
+from tkinter import ttk
 import os
 
 import cv2
@@ -53,7 +54,7 @@ class CVPreviewStep:
         self.frompipeline = from_pipeline
 
     def show(self, img):
-        if self.frompipeline._suppress_preview:
+        if self.frompipeline._suppress_ui:
             return
 
         _winname = '[{}]{}'.format(self.stepn, self.stepname)
@@ -86,6 +87,7 @@ class CVStep(CVPreviewStep):
         self.directargs = directargs
         self.show_preview = show_preview
 
+        self._uiprogressbar = None
         self.__doaftercancel = None
         self.__cb = (None, (), {})
 
@@ -228,7 +230,7 @@ class CVPipeline:
         self._tk = tkinter.Tk()
         self._should_create_tuneui = False
         self._load_steps_only = False
-        self._suppress_preview = False
+        self._suppress_ui = False
         self.__doaftercancel = None
 
     @property
@@ -261,7 +263,7 @@ class CVPipeline:
         self._current_input = inputargs
         self._should_create_tuneui = True
         self._load_steps_only = False
-        self._suppress_preview = False
+        self._suppress_ui = False
 
         self.__create_common_gui()
         # First run to create trackbar ui etc.
@@ -279,7 +281,7 @@ class CVPipeline:
         else:
             # Steps are already loaded, we won't create new steps, just load them
             self._load_steps_only = True
-        self._suppress_preview = True
+        self._suppress_ui = True
         return self.__run(*inputargs)
 
     def __run_pipeline_update(self):
@@ -300,24 +302,38 @@ class CVPipeline:
     def _pre_pipeline(self):
         if self._load_steps_only:
             if self._should_create_tuneui:
-                raise ValueError('_should_create_tuneui will not have effect when _load_steps_only set')
+                raise ValueError('_should_create_tuneui=True will not have effect when _load_steps_only set')
+        if self._suppress_ui is True and self._should_create_tuneui is True:
+            raise ValueError('`_suppress_ui` and `_should_create_tuneui` should NOT be True at the same time')
         self._currentstep = 0
+        if not self._suppress_ui:
+            self._uiprogressbar['maximum'] = len(self.steps)
+            self._uiprogressbar.start()
 
     def _post_pipeline(self):
         self._timesrun += 1
+        if self._should_create_tuneui:
+            self._uiprogressbar.stop()
+        if not self._suppress_ui:
+            self._uiprogressbar.stop()
 
     def __create_common_gui(self):
+        assert self._suppress_ui == False
         screenw = self._tk.winfo_screenwidth()
         self.preview_window_arranger = CvWindowArranger(screenw)
 
         self._tk.title(self.pipelinename)
 
+        # A progressbar
+        self._uiprogressbar = ttk.Progressbar(self._tk, orient=tkinter.HORIZONTAL, mode='determinate')  # 'indeterminate' or 'determinate'
+        self._uiprogressbar.pack(fill=tkinter.X)
+
         # Create a SAVE button
         b = tkinter.Button(self._tk, text="SAVE CURRENT", command=self.save_tuning)
         b.pack()
 
-        def load_default():
-            pass
+        # def load_default():
+        #     pass
 
         # b = tkinter.Button(self._tk, text="LOAD DEFAULT", command=load_default)
         # b.pack()
@@ -379,8 +395,8 @@ class CVPipeline:
                         initoverride[k] = self.savedconfig.get(sect, k)
             step.init_tune_params(**kwargs, initoverride=initoverride)
 
-            if self._should_create_tuneui:
-                labelframe = tkinter.LabelFrame(self._tk, text=handler.__name__)
+            if self._should_create_tuneui and not self._suppress_ui:
+                labelframe = tkinter.LabelFrame(self._tk, text='[{}] {}'.format(self._currentstep, handler.__name__))
                 labelframe.pack(expand="yes")
 
                 step.create_tune_trackbars(labelframe)
@@ -390,6 +406,11 @@ class CVPipeline:
             self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
 
         ret = step.apply_values()
+
+        if not self._suppress_ui:
+            self._uiprogressbar['value'] = self._currentstep+1
+            # self._uiprogressbar.step()
+            self._tk.update_idletasks()
 
         self._currentstep += 1
         return ret
