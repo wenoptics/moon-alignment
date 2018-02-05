@@ -12,7 +12,7 @@ from utils.util import SteppedIntVar, resize, isCvWindowsExists
 class CVStep:
     UPDATE_AFTER_CANCEL = True
 
-    def __init__(self, from_pipeline:'CVPipeline', handler, *directargs, show_preview=True):
+    def __init__(self, from_pipeline: 'CVPipeline', handler, *directargs, show_preview=True):
         self.valuedict = {}
         self.paramsettingdict = {}
         self.handler = handler
@@ -59,8 +59,8 @@ class CVStep:
             cv2.imshow(_winname, img)
 
             def get_win_position(index) -> (int, int):
-                PADDING_LEFT = 10; PADDING_TOP = 10
-                GAP_LEFT = 0; GAP_TOP = 20
+                PADDING_LEFT, PADDING_TOP = 10, 10
+                GAP_LEFT, GAP_TOP = 0, 20
                 imgw, imgh = img.shape[1], img.shape[0]
                 scrw, scrh = self.frompipeline._tk.winfo_screenwidth(), self.frompipeline._tk.winfo_screenheight()
                 NX = (scrw - PADDING_LEFT) // (imgw + GAP_LEFT)
@@ -77,7 +77,7 @@ class CVStep:
 
         return ret
 
-    def init_tune_params(self, initoverride: dict=None, **tunes):
+    def init_tune_params(self, initoverride: dict = None, **tunes):
         # Looking for init value from the handler function
         sig = inspect.signature(self.handler)
         # This is how we define rules for a valid tuning parameter
@@ -90,8 +90,8 @@ class CVStep:
             if tunes.get(param.name):
                 tuninginitvalues[param.name] = param.default
             else:
-                self.logger.warning('no tuning found for "%s". (ignore if it is not a tuning '
-                                    'parameter you concerning)', param.name)
+                self.logger.warning('no tuning found for "%s". (ignore if it is not a tuning parameter you concerning)',
+                                    param.name)
 
         # Make override
         if initoverride:
@@ -102,17 +102,11 @@ class CVStep:
                 self.logger.debug('initial value of "%s" override to %s', k, v)
                 tuninginitvalues[k] = v
 
-        # # Delete not used tunes
-        # for k in list(tunes.keys()):  # make a dict copy
-        #     if k not in [param.name for param in tuningparams]:
-        #         self.logger.warning('tuning param "%s" not found in tuning target `%s`, ignored.', k,
-        #                             self.handler.__name__)
-        #         del tunes[k]
-
-        for k,v in list(tunes.items()):
+        # Check tune settings
+        for k, v in list(tunes.items()):
             if type(v) is not tuple or len(v) < 2:
-                self.logger.warning('param "%s" doesnt seem like valid tuning param setting for target `%s`, ignored.', k,
-                                     self.handler.__name__)
+                self.logger.warning('param "%s" doesnt seem like valid tuning param setting for target `%s`, ignored.',
+                                    k, self.handler.__name__)
                 del tunes[k]
             if k not in [param.name for param in tuningparams]:
                 raise ValueError('Param tuning setting "{0}" doesnt have a related param in `{1}`. '
@@ -143,9 +137,9 @@ class CVStep:
                 'type': type_
             }
 
-    def create_tune_trackbar(self, tk):
+    def create_tune_trackbars(self, tk):
         """Please make sure you have called init_tune_params() before this"""
-        for paramname,v in self.paramsettingdict.items():
+        for paramname, v in self.paramsettingdict.items():
 
             def _trackbar_callback(_):
                 # print('trackbar value changed in step ', self.stepn)
@@ -158,7 +152,7 @@ class CVStep:
 
             resolution_ = {}
             if v['type'] is float:
-                resolution_ = {'resolution': (v['to'] - v['from'])/100}
+                resolution_ = {'resolution': (v['to'] - v['from']) / 100}
             trackbar = tkinter.Scale(tk,
                                      from_=v['from'], to=v['to'], variable=v['dynvar'], label=paramname,
                                      command=_trackbar_callback, orient=tkinter.HORIZONTAL, length=500, **resolution_)
@@ -198,7 +192,7 @@ class CVPipeline:
 
     @property
     def config_url(self):
-        return os.path.join(self.configpath, self.pipelinename+'.conf')
+        return os.path.join(self.configpath, self.pipelinename + '.conf')
 
     def _pipeline(self, *inputargs):
         """
@@ -304,7 +298,7 @@ class CVPipeline:
             sect = step.handler.__name__
             config.add_section(sect)
             vd = step.get_actual_valuedict()
-            for k,v in vd.items():
+            for k, v in vd.items():
                 print('setting config:', step.handler.__name__, k, str(v))
                 config.set(sect, k, str(v))
         config.write(open(fn, 'w'))
@@ -354,7 +348,10 @@ class CVPipeline:
             step.init_tune_params(**kwargs, initoverride=initoverride)
 
             if self._should_create_tuneui:
-                step.create_tune_trackbar(self._tk)
+                labelframe = tkinter.LabelFrame(self._tk, text=handler.__name__)
+                labelframe.pack(expand="yes")
+
+                step.create_tune_trackbars(labelframe)
 
             # Save step info
             self.steps.append(step)
@@ -369,6 +366,7 @@ class CVPipeline:
 if __name__ == '__main__':
     """This is an example (as well)"""
 
+
     class TuneSomething(CVPipeline):
         def _pipeline(self, *inputargs):
             img_ = inputargs[0]
@@ -376,7 +374,7 @@ if __name__ == '__main__':
             def procedure1(img, _valA=5, _valB=12):
                 ret1 = {}
                 ret2 = _valA + _valB
-                print('procedure1: _valA=',_valA,'_valB=',_valB,'ret2==', ret2)
+                print('procedure1: _valA=', _valA, '_valB=', _valB, 'ret2==', ret2)
                 return img, ret1, ret2
 
             step1ret = self._add_tune_step(procedure1, img_,
@@ -398,10 +396,11 @@ if __name__ == '__main__':
 
             return step3ret
 
+
     logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
     t = TuneSomething()
     test_img = resize(cv2.imread('../test_dataset/DSC01332.jpg'), 500)
 
     # t.run_pipeline_tuning( test_img )
 
-    t.run_pipeline_final( test_img )
+    t.run_pipeline_final(test_img)
