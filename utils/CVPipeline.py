@@ -36,13 +36,13 @@ class CVStep:
             self.__cb[0].__call__(*self.__cb[1], **self.__cb[2])
 
     def get_actual_valuedict(self):
-        # Make a copy
-        vd = dict(self.valuedict)
+        vd = dict(self.valuedict)  # Make a copy
         for k, v in self.valuedict.items():
             vd[k] = v.get()
         return vd
 
     def apply_values(self):
+        """Apply tuning value to the target handler."""
         vd = self.get_actual_valuedict()
         self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
         ret = self.handler.__call__(*self.directargs, **vd)
@@ -150,7 +150,7 @@ class CVPipeline:
     """A abstract class that help tuning your OpenCV app pipeline with convenience (wenoptk)
 
         Call .run_pipeline_tuning() to tune your pipeline!
-        Call .load_pipeline_quite() then .run_pipeline_final() to run your tuned pipeline!
+        Call .run_pipeline_final() to run your tuned pipeline!
     """
 
     def __init__(self, force_resize_preview_w=0):
@@ -210,7 +210,11 @@ class CVPipeline:
     #     return self.__run(*inputargs)
 
     def run_pipeline_tuning(self, *inputargs):
-        """Run pipeline tuning. Will try to read the params from the config file"""
+        """Run pipeline tuning. Will try to read the params from the config file
+
+            Noted that this will invoke the pipeline twice (one for initializing all steps,
+                one invoked when tk.trackbars initialized)
+        """
         self._current_input = inputargs
         self._should_create_tuneui = True
         self._load_steps_only = False
@@ -380,5 +384,4 @@ if __name__ == '__main__':
 
     # t.run_pipeline_tuning( test_img )
 
-    t.load_pipeline_quite()
     t.run_pipeline_final( test_img )
