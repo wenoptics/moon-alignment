@@ -62,6 +62,8 @@ class Tuning():
     为opencv的参数调整流程，自动创建trackbar
 
     by Wenoptk
+
+    deprecated, use `CVPipeline` instead
     """
     UPDATE_AFTER_CANCEL = True
 

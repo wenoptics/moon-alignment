@@ -45,10 +45,6 @@ class CvWindowArranger:
     def get_windows_position(self, winname):
         return self._windows.get(winname)
 
-    def remove_window(self):
-        # todo
-        pass
-
 
 class CVPreviewStep:
     def __init__(self, from_pipeline: 'CVPipeline', n: int):
@@ -56,6 +52,8 @@ class CVPreviewStep:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.stepname = 'cvPreviewStep1'
         self.frompipeline = from_pipeline
+
+        self._win_x, self._win_y = None, None
 
     def show(self, img):
         if self.frompipeline._suppress_ui:
@@ -66,7 +64,6 @@ class CVPreviewStep:
         if img is None:
             self.logger.warning('image in CVPreviewStep "%s" is None, will not show', self.stepname)
             cv2.destroyWindow(_winname)
-            self.frompipeline.preview_window_arranger.remove_window(_winname)
             return
 
         # Resize preview image
@@ -77,12 +74,11 @@ class CVPreviewStep:
         cv2.imshow(_winname, img)
 
         # Arrange the window... when open many windows, it gets so messy
-        if not is_existed:
+        if not is_existed:  # Don't arrange the window if already existed (maybe user have moved it..)
             w, h = img.shape[1], img.shape[0]
-            x, y = self.frompipeline.preview_window_arranger \
-                .add_window(_winname, w, h)
-            # Don't arrange the window if user have move it..
-            cv2.moveWindow(_winname, x, y)
+            if self._win_x is None:
+                self._win_x, self._win_y = self.frompipeline.preview_window_arranger.add_window(_winname, w, h)
+            cv2.moveWindow(_winname, self._win_x, self._win_y)
 
 
 class CVStep(CVPreviewStep):
