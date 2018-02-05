@@ -84,13 +84,12 @@ class CVPreviewStep:
 class CVStep(CVPreviewStep):
     UPDATE_AFTER_CANCEL = True
 
-    def __init__(self, from_pipeline: 'CVPipeline', n: int, handler, *directargs, show_preview=True):
+    def __init__(self, from_pipeline: 'CVPipeline', n: int, handler, show_preview=True):
         super().__init__(from_pipeline, n)
         self.valuedict = {}
         self.paramsettingdict = {}
         self.handler = handler
         self.stepname = handler.__name__
-        self.directargs = directargs
         self.show_preview = show_preview
 
         self.__doaftercancel = None
@@ -115,11 +114,11 @@ class CVStep(CVPreviewStep):
                 vd[k] = v
         return vd
 
-    def apply_values(self):
+    def apply_values(self, *directargs):
         """Apply tuning value to the target handler. And show the preview if need to"""
         vd = self.get_actual_valuedict()
         self.logger.debug('tuned param for "%s": %s', self.handler.__name__, str(vd))
-        ret = self.handler.__call__(*self.directargs, **vd)
+        ret = self.handler.__call__(*directargs, **vd)
 
         if self.show_preview:
             img = ret[0] if type(ret) is tuple else ret
@@ -388,8 +387,7 @@ class CVPipeline:
 
         if step is None:
             # Step not found, new one
-            step = CVStep(self, self._currentstep,
-                          handler, *directargs, show_preview=show_preview)
+            step = CVStep(self, self._currentstep, handler, show_preview=show_preview)
 
             def _cb():
                 # Skip blink when initializing sliders
@@ -422,7 +420,7 @@ class CVPipeline:
             labelframe.pack(expand="yes")
             step.create_tune_trackbars(labelframe)
 
-        ret = step.apply_values()
+        ret = step.apply_values(*directargs)
 
         if not self._suppress_ui:
             self._uiprogressbar['value'] = self._currentstep+1

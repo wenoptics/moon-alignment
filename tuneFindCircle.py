@@ -28,4 +28,4 @@ if __name__ == '__main__':
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.1, fy=0.1)
     print('origin img.shape={}'.format(ori_img.shape))
     roi, x, y = FindMainObject().run_pipeline_final(ori_img)
-    FindCircle().run_pipeline_tuning(roi)
+    FindCircle(force_resize_preview_w=400).run_pipeline_tuning(roi)

@@ -16,11 +16,6 @@ class Circle():
         self.x = x
 
 
-
-
-
-
-
 def adp_thresh_bin(gray, thr=250):
     # cv2.imshow('before equalizeHist', gray)
     img = cv2.equalizeHist(gray)
@@ -94,7 +89,8 @@ class FindCircle(CVPipeline):
             return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
         img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
 
-        img_ = cv2.addWeighted(img_gray, 0.05, img_, 1, 0)
+        img_ = cv2.addWeighted(img_gray, 0.2, img_, 0.8, 0)
+        self._add_debug_view('addWeighted', img_)
 
         def h_circle(img, img_ori, _min_dist=900, _param1=47, _param2=6):
             circles = cv2.HoughCircles(img.copy(), cv2.HOUGH_GRADIENT, 1,
@@ -310,13 +306,14 @@ class FindMainObject(CVPipeline):
         img = inputargs[0]
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
+        # For comparision
         # Find a suitable threshold from histogram
         def auto_threshold(img, _percent=0.05):
             majorblack = find_black_drop(img, _percent)
             logger.debug('majorblack==%d', majorblack)
             _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
             return gray_img
-        img_auto_thr = self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
+        self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
 
         # For comparision
         def threshold_bin(img, _threshold=10):
@@ -324,16 +321,17 @@ class FindMainObject(CVPipeline):
             return retimg
         self._add_tune_step(threshold_bin, img_gray, _threshold=(0, 255))
 
-        # For comparision
-        _, img_otsu = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        self._add_debug_view('otsu threshold', img_otsu)
+        # Auto threshold using Otsu threshold
+        tval, img_ = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self.logger.info('value using using Otsu threshold == %d', tval)
+        self._add_debug_view('otsu threshold', img_)
 
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
         def morphopen(img, _kernel=43):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        img_ = self._add_tune_step(morphopen, img_auto_thr, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
 
         # Eliminate the noise inside
         def morphclose(img, _kernel=73):
