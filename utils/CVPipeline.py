@@ -247,14 +247,15 @@ class CVPipeline:
         self.preview_window_arranger = None
         self._tk = None
 
-        self._retval = None
-        self._current_input = ()
+        self.__retval = None
+        self.__current_input = ()
 
-        self._uiprogressbar = None
-        self._currentstep = 0
-        self._timesrun = 0
-        self._should_create_tuneui = False
+        self.timesrun = 0
         self._suppress_ui = False
+        self._is_tuning = False
+        self._currentstep = 0
+        self.__uiprogressbar = None
+        self.__should_create_tuneui = False
         self.__doaftercancel = None
 
     @property
@@ -284,13 +285,14 @@ class CVPipeline:
             Noted that this will invoke the pipeline twice (one for initializing all steps,
                 one invoked when tk.trackbars initialized)
         """
-        self._current_input = inputargs
-        self._should_create_tuneui = True
+        self.__current_input = inputargs
+        self.__should_create_tuneui = True
         self._suppress_ui = False
+        self._is_tuning = True
 
         self.__create_gui()
         # First run to create trackbar ui etc.
-        self._retval = self.__run(*inputargs)
+        self.__retval = self.__run(*inputargs)
 
         # Block until tune window closed
         self._tk.mainloop()
@@ -299,41 +301,43 @@ class CVPipeline:
         for step in self.steps.values():
             step.close_preview_window()
 
-        return self._retval
+        self._is_tuning = False
+        return self.__retval
 
     def run_pipeline_final(self, *inputargs):
         """Run the tuned, final pipeline. Will try to read the params from the config file"""
         self._suppress_ui = True
-        self._should_create_tuneui = False
+        self.__should_create_tuneui = False
+        self._is_tuning = False
         return self.__run(*inputargs)
 
     def __run_pipeline_update(self):
         """re-run pipeline, only for updating values(tuning params)"""
-        self._should_create_tuneui = False
+        self.__should_create_tuneui = False
         # Skip blink when initializing sliders
         self.__doaftercancel = None
-        self._retval = self.__run(*self._current_input)
+        self.__retval = self.__run(*self.__current_input)
 
     def __run(self, *inputargs):
         self._pre_pipeline()
-        self._retval = self._pipeline(*inputargs)
+        self.__retval = self._pipeline(*inputargs)
         self._post_pipeline()
-        return self._retval
+        return self.__retval
 
     def _pre_pipeline(self):
-        if self._suppress_ui is True and self._should_create_tuneui is True:
+        if self._suppress_ui is True and self.__should_create_tuneui is True:
             raise ValueError('`_suppress_ui` and `_should_create_tuneui` should NOT be True at the same time')
         self._currentstep = 0
         if not self._suppress_ui:
-            self._uiprogressbar['maximum'] = len(self.steps)
-            self._uiprogressbar.start()
+            self.__uiprogressbar['maximum'] = len(self.steps)
+            self.__uiprogressbar.start()
 
     def _post_pipeline(self):
-        self._timesrun += 1
-        if self._should_create_tuneui:
-            self._uiprogressbar.stop()
+        self.timesrun += 1
+        if self.__should_create_tuneui:
+            self.__uiprogressbar.stop()
         if not self._suppress_ui:
-            self._uiprogressbar.stop()
+            self.__uiprogressbar.stop()
 
     def __create_gui(self):
         assert self._suppress_ui is False
@@ -344,8 +348,8 @@ class CVPipeline:
         self._tk.title(self.pipelinename)
 
         # A progressbar
-        self._uiprogressbar = ttk.Progressbar(self._tk, orient=tkinter.HORIZONTAL, mode='determinate')  # 'indeterminate' or 'determinate'
-        self._uiprogressbar.pack(fill=tkinter.X)
+        self.__uiprogressbar = ttk.Progressbar(self._tk, orient=tkinter.HORIZONTAL, mode='determinate')  # 'indeterminate' or 'determinate'
+        self.__uiprogressbar.pack(fill=tkinter.X)
 
         # Create a SAVE button
         b = tkinter.Button(self._tk, text="SAVE CURRENT", command=self.save_tuning)
@@ -429,7 +433,7 @@ class CVPipeline:
         assert step.stepn == self._currentstep
 
         # Check if we have to create some ui here
-        if self._should_create_tuneui and not self._suppress_ui:
+        if self.__should_create_tuneui and not self._suppress_ui:
             labelframe = tkinter.LabelFrame(self._tk, text='[{}] {}'.format(self._currentstep, handler.__name__))
             labelframe.pack(expand="yes")
             step.create_tune_trackbars(labelframe)
@@ -437,7 +441,7 @@ class CVPipeline:
         ret = step.apply_values(*directargs)
 
         if not self._suppress_ui:
-            self._uiprogressbar['value'] = self._currentstep+1
+            self.__uiprogressbar['value'] = self._currentstep + 1
             # self._uiprogressbar.step()
             self._tk.update_idletasks()
 
@@ -455,7 +459,7 @@ class CVPipeline:
             self.__add_step(winname, step)
         step.show(img)
         if not self._suppress_ui:
-            self._uiprogressbar['value'] = self._currentstep+1
+            self.__uiprogressbar['value'] = self._currentstep + 1
             # self._uiprogressbar.step()
             self._tk.update_idletasks()
         self._currentstep += 1
