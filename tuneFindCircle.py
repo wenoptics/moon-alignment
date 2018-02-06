@@ -20,9 +20,9 @@ if __name__ == '__main__':
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01325.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01332.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01350.jpg',
-        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01353.jpg',
+        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01353.jpg',
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01364.jpg',
-        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01367.jpg',
+        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01367.jpg',
     )
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.1, fy=0.1)
     print('origin img.shape={}'.format(ori_img.shape))

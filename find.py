@@ -97,18 +97,18 @@ class FindCircle(CVPipeline):
         return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
 
     def _pipeline(self, *inputargs):
-        img = inputargs[0]
+        inputimg = inputargs[0]
 
-        img_scaled, factor = self.scale_to_normal(img)
+        img_scaled, factor = self.scale_to_normal(inputimg)
         img_ = cv2.cvtColor(img_scaled, cv2.COLOR_BGR2GRAY)
 
         def biltfilter(img, _d=15, _sigmacolor=750, _sigmaspace=750):
             return cv2.bilateralFilter(img, _d, _sigmacolor, _sigmaspace)
         img_ = self._add_tune_step(biltfilter, img_, _d=(0, 30), _sigmacolor=(0, 1250), _sigmaspace=(0, 1250))
 
-        # def medianblur(img, _blur=19):
-        #     return cv2.medianBlur(img, _blur)
-        # img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
+        def medianblur(img, _blur=19):
+            return cv2.medianBlur(img, _blur)
+        img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
 
         def canny(img, _sigma=0.33):
             return auto_canny(img, sigma=_sigma)
@@ -146,74 +146,81 @@ class FindCircle(CVPipeline):
         # -----------------------------------------------------------------------------------------------------------
         # Try using contour method
 
-        if self._is_tuning:
-            largest_contour = find_largest_contour(img_)
-            if largest_contour is None:
-                print('no contour found.')
-            else:
-                print('largest_contour has {} points'.format(len(largest_contour)))
-                img_1 = img_scaled.copy()
-                cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
-                self._add_debug_view('drawContours', img_1)
+        largest_contour = find_largest_contour(img_)
+        if largest_contour is None:
+            self.logger.warning('no contour found.')
+            return None
 
-                if False:  # Select some contour manually
-                    c = ContourSelector(img_scaled.copy(), largest_contour)
-                    c.show_and_interact()
-                    arc_contour = c.get_selected()
-                    cx, cy, cr = self.fit_circle(arc_contour)
-                else:
-                    cx, cy, cr = self.fit_circle(largest_contour)
+        self.logger.debug('contour has {} points'.format(len(largest_contour)))
+        img_1 = img_scaled.copy()
+        cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
+        self._add_debug_view('drawContours', img_1)
 
-                (cx, cy, cr) = np.uint16(np.around((cx, cy, cr)))
-                img_2 = img_scaled.copy()
-                cv2.circle(img_2, (cx, cy), cr, (0, 255, 0), 1)
-                cv2.circle(img_2, (cx, cy), 2, (0, 0, 255), 1)
-                self._add_debug_view('fitcircle', img_2)
+        if False:  # Select some contour manually
+            c = ContourSelector(img_scaled.copy(), largest_contour)
+            c.show_and_interact()
+            arc_contour = c.get_selected()
+            cx, cy, cr = self.fit_circle(arc_contour)
+        else:
+            cx, cy, cr = self.fit_circle(largest_contour)
 
-                img_3 = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
-                cv2.circle(img_3, (cx, cy), cr, (0, 255, 0), 1)
-                cv2.circle(img_3, (cx, cy), 2, (0, 0, 255), 1)
-                self._add_debug_view('fitcircle vs canny', img_3)
+        # Remove padding and scale back
+        _x = int((cx - padding) / factor)
+        _y = int((cy - padding) / factor)
+        _r = int(cr / factor)
+        ret_circle = Circle(_x, _y, _r)
 
-                # ellipse = cv2.fitEllipse(largest_contour)
-                # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
-                # cv2.imshow('find_circle.fitEllipse', img_ellipse)
-                # print("ellipse: %s" % str(ellipse))
+        # Draw the fitting circle for preview
+        (cx, cy, cr) = np.uint16(np.around((cx, cy, cr)))
+        img_2 = img_scaled.copy()
+        cv2.circle(img_2, (cx, cy), cr, (0, 255, 0), 1)
+        cv2.circle(img_2, (cx, cy), 2, (0, 0, 255), 1)
+        self._add_debug_view('fitcircle', img_2)
+
+        img_3 = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
+        cv2.circle(img_3, (cx, cy), cr, (0, 255, 0), 1)
+        cv2.circle(img_3, (cx, cy), 2, (0, 0, 255), 1)
+        self._add_debug_view('fitcircle vs canny', img_3)
+
+        # Scale the circle back to ori size
+        return ret_circle
+
 
         # -----------------------------------------------------------------------------------------------------------
 
-        img_ = cv2.addWeighted(img_gray, 0.2, img_, 0.8, 0)
-        self._add_debug_view('addWeighted', img_)
-
-        def h_circle(img, img_ori, _min_dist=900, _param1=47, _param2=6):
-            circles = cv2.HoughCircles(img.copy(), cv2.HOUGH_GRADIENT, 1,
-                                       minDist=_min_dist, param1=_param1, param2=_param2,
-                                       minRadius=int(self.NORM_WIDTH / 2 - self.NORM_WIDTH * 0.3),
-                                       maxRadius=int(self.NORM_WIDTH / 2 + self.NORM_WIDTH * 0.1))
-            if circles is None:
-                self.logger.warning('No circle found')
-                return None, None
-            draw_circles = np.uint16(np.around(circles))
-            img_draw = img_ori.copy()
-            for i in draw_circles[0, :]:
-                # Draw the outer circle
-                cv2.circle(img_draw, (i[0], i[1]), i[2], (0, 255, 0), 1)
-                # Draw the center of the circle
-                cv2.circle(img_draw, (i[0], i[1]), 2, (0, 0, 255), 1)
-            return img_draw, circles
-        _, circles = self._add_tune_step(h_circle, img_, img_scaled, _min_dist=(1, 1000), _param1=(1, 300), _param2=(1, 300))
-
-        ret = []
-        if circles is None:
-            return []
-        for i in circles[0, :]:
-            # Scale the circle back to ori size
-            x = int((i[0] - padding) / factor)
-            y = int((i[1] - padding) / factor)
-            r = int((i[2]) / factor)
-
-            ret.append(Circle(x, y, r))
-        return ret
+        # img_ = cv2.addWeighted(img_gray, 0.2, img_, 0.8, 0)
+        # # self._add_debug_view('addWeighted', img_)
+        #
+        # def h_circle(img, img_ori, _min_dist=900, _param1=47, _param2=6):
+        #     circles = cv2.HoughCircles(img.copy(), cv2.HOUGH_GRADIENT, 1,
+        #                                minDist=_min_dist, param1=_param1, param2=_param2,
+        #                                minRadius=int(self.NORM_WIDTH / 2 - self.NORM_WIDTH * 0.3),
+        #                                maxRadius=int(self.NORM_WIDTH / 2 + self.NORM_WIDTH * 0.1))
+        #     if circles is None:
+        #         self.logger.warning('No circle found')
+        #         return None, None
+        #     draw_circles = np.uint16(np.around(circles))
+        #     img_draw = img_ori.copy()
+        #     for i in draw_circles[0, :]:
+        #         # Draw the outer circle
+        #         cv2.circle(img_draw, (i[0], i[1]), i[2], (0, 255, 0), 1)
+        #         # Draw the center of the circle
+        #         cv2.circle(img_draw, (i[0], i[1]), 2, (0, 0, 255), 1)
+        #     return img_draw, circles
+        # _, circles = self._add_tune_step(h_circle, img_, img_scaled,
+        #                                  _min_dist=(1, 1000), _param1=(1, 300), _param2=(1, 300), show_preview=False)
+        #
+        # ret = []
+        # if circles is None:
+        #     return []
+        # for i in circles[0, :]:
+        #     # Scale the circle back to ori size
+        #     x = int((i[0] - padding) / factor)
+        #     y = int((i[1] - padding) / factor)
+        #     r = int((i[2]) / factor)
+        #
+        #     ret.append(Circle(x, y, r))
+        # return ret
 
 
 def find_largest_contour(bin_img):
@@ -346,7 +353,6 @@ def draw_moon(img, moon: Circle):
 
 
 def find_moon(img, f0: FindMainObject, f1: FindCircle, tune=False) -> Circle:
-
     p0 = f0.run_pipeline_final
     p1 = f1.run_pipeline_final
     if tune:
@@ -358,22 +364,12 @@ def find_moon(img, f0: FindMainObject, f1: FindCircle, tune=False) -> Circle:
         logger.error('Failed to locate a main object, aborted.')
         return None
 
-    circles = p1(roi)
-    if not circles:
+    circle_ = p1(roi)
+    if not circle_:
         return None
 
-    ret_circle = circles[0]
-    if len(circles) > 1:
-        logger.warning('Warning: detected more than one circle, use the largest one')
-
-        largest_r = 0
-        for c in circles:
-            if c.r > largest_r:
-                ret_circle = c
-                largest_r = c.r
-
     # Offset the roi
-    ret_circle.x += rx
-    ret_circle.y += ry
+    circle_.x += rx
+    circle_.y += ry
 
-    return ret_circle
+    return circle_

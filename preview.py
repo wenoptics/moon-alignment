@@ -1,6 +1,7 @@
 import cv2
 
-from find import resize, find_moon, draw_moon, FindMainObject, FindCircle
+from find import find_moon, draw_moon, FindMainObject, FindCircle
+from utils import util
 
 PREVIEW_WIDTH = 500
 
@@ -27,12 +28,12 @@ for img_path in test_img:
     moon = find_moon(img, f0, f1)
     if not moon:
         print('moon not detected in {}'.format(img_path))
-        cv2.imshow('ori - {}'.format(img_path), resize(img, PREVIEW_WIDTH))
+        cv2.imshow('ori - {}'.format(img_path), util.resize(img, PREVIEW_WIDTH))
         continue
 
     draw_moon(img, moon)
 
-    cv2.imshow('moondetect - {}'.format(img_path), resize(img, PREVIEW_WIDTH))
+    cv2.imshow('moondetect - {}'.format(img_path), util.resize(img, PREVIEW_WIDTH))
     # cv2.imwrite('img/moondetect_preview.jpg'.format(img_path), img)
     cv2.waitKey()
     cv2.destroyAllWindows()
