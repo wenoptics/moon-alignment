@@ -43,6 +43,43 @@ class FindCircle(CVPipeline):
     # Normalize image
     NORM_WIDTH = 500
 
+    @staticmethod
+    def fit_circle(arc_contour):
+        from scipy import odr
+
+        x = np.array([i[0][0] for i in arc_contour])
+        y = np.array([i[0][1] for i in arc_contour])
+
+        def calc_R(c):
+            """ calculate the distance of each 2D points from the center c=(xc, yc) """
+            return np.sqrt((x - c[0]) ** 2 + (y - c[1]) ** 2)
+
+        def circlemodel(beta, x):
+            """ implicit function of the circle """
+            xc, yc, r = beta
+            return (x[0] - xc) ** 2 + (x[1] - yc) ** 2 - r ** 2
+
+        def calc_estimate(data):
+            """ Return a first estimation on the parameter from the data  """
+            xc0, yc0 = data.x.mean(axis=1)
+            r0 = np.sqrt((data.x[0] - xc0) ** 2 + (data.x[1] - yc0) ** 2).mean()
+            return xc0, yc0, r0
+
+        # for implicit function :
+        #       data.x contains both coordinates of the points
+        #       data.y is the dimensionality of the response
+        lsc_data = odr.Data(np.row_stack([x, y]), y=1)
+        lsc_model = odr.Model(circlemodel, implicit=True, estimate=calc_estimate)
+        lsc_odr = odr.ODR(lsc_data, lsc_model)
+        lsc_out = lsc_odr.run()
+
+        xc_3, yc_3, R_3 = lsc_out.beta
+        Ri_3 = calc_R([xc_3, yc_3])
+        residu_3 = sum((Ri_3 - R_3) ** 2)
+        residu2_3 = sum((Ri_3 ** 2 - R_3 ** 2) ** 2)
+        print('lsc_out.sum_square = ', lsc_out.sum_square)
+        return xc_3, yc_3, R_3
+
     def scale_to_normal(self, img):
         h, w, _ = img.shape
         if w < self.NORM_WIDTH:
@@ -97,10 +134,18 @@ class FindCircle(CVPipeline):
             print('largest_contour has {} points'.format(len(largest_contour)))
             img_1 = img_scaled.copy()
             cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
-            self._add_debug_view('find_circle.drawContours', img_1)
+            self._add_debug_view('drawContours', img_1)
 
             c = ContourSelector(img_scaled.copy(), largest_contour)
             c.show_and_interact()
+            arc_contour = c.get_selected()
+            cx, cy, cr = self.fit_circle(arc_contour)
+
+            (cx, cy, cr) = np.uint16(np.around((cx, cy, cr)))
+            img_2 = img_scaled.copy()
+            cv2.circle(img_2, (cx, cy), cr, (0, 255, 0), 1)
+            cv2.circle(img_2, (cx, cy), 2, (0, 0, 255), 1)
+            self._add_debug_view('fitcircle', img_2)
 
             # ellipse = cv2.fitEllipse(largest_contour)
             # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)

@@ -45,6 +45,8 @@ class ContourSelector:
             else:
                 raise ValueError('unknown mode "{}"'.format(mode))
 
+        self.logger.info('%d selected', self.selected_tf_table.count(True))
+
     def show_and_interact(self):
         modes = ['*', '+', '-']
         mode = modes[0]
