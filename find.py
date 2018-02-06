@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 
 from utils.CVPipeline import CVPipeline
-from utils.util import resize
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +45,11 @@ class FindCircle(CVPipeline):
     def scale_to_normal(self, img):
         h, w, _ = img.shape
         if w < self.NORM_WIDTH:
-            logger.warning('input image has size(w={}) smaller than normailize size(w={})'.format(w, self.NORM_WIDTH))
+            self.logger.warning('input image has size(w={}) smaller than normailize size(w={})'.format(w, self.NORM_WIDTH))
 
         factor = self.NORM_WIDTH / w
         if factor < 0.5:
-            logger.warning(
+            self.logger.warning(
                 'The ratio is too small (%.2f), may not produce the correct detection. (is the moon too small?)',
                 factor)
         return cv2.resize(img, (0, 0), fx=factor, fy=factor), factor
@@ -98,7 +97,7 @@ class FindCircle(CVPipeline):
                                        minRadius=int(self.NORM_WIDTH / 2 - self.NORM_WIDTH * 0.3),
                                        maxRadius=int(self.NORM_WIDTH / 2 + self.NORM_WIDTH * 0.1))
             if circles is None:
-                logger.warning('No circle found')
+                self.logger.warning('No circle found')
                 return None, None
             draw_circles = np.uint16(np.around(circles))
             img_draw = img_ori.copy()
@@ -310,7 +309,7 @@ class FindMainObject(CVPipeline):
         # Find a suitable threshold from histogram
         def auto_threshold(img, _percent=0.05):
             majorblack = find_black_drop(img, _percent)
-            logger.debug('majorblack==%d', majorblack)
+            self.logger.debug('majorblack==%d', majorblack)
             _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
             return gray_img
         self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
@@ -362,7 +361,7 @@ class FindMainObject(CVPipeline):
         roi = img[y_:y_ + h_, x_:x_ + w_]
         self._add_debug_view('roi', roi)
 
-        logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
+        self.logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
         return roi, x_, y_
 
 

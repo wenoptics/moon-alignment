@@ -89,7 +89,7 @@ class CVPreviewStep:
             cv2.destroyWindow(self._winname)
 
 
-class CVStep(CVPreviewStep):
+class CVTuneStep(CVPreviewStep):
     UPDATE_AFTER_CANCEL = True
 
     def __init__(self, from_pipeline: 'CVPipeline', n: int, handler, show_preview=True):
@@ -362,7 +362,7 @@ class CVPipeline:
         fn = self.config_url
         config = configparser.ConfigParser()
         for step in self.steps.values():
-            if not isinstance(step, CVStep):
+            if not isinstance(step, CVTuneStep):
                 continue
             sect = step.handler.__name__
             if not config.has_section(sect):
@@ -401,7 +401,7 @@ class CVPipeline:
 
         if step is None:
             # Step not found, new one
-            step = CVStep(self, self._currentstep, handler, show_preview=show_preview)
+            step = CVTuneStep(self, self._currentstep, handler, show_preview=show_preview)
 
             def _cb():
                 # Skip blink when initializing sliders
