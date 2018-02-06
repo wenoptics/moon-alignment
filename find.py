@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from utils.CVPipeline import CVPipeline
+from utils.ContourSelector import ContourSelector
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,9 @@ class FindCircle(CVPipeline):
             img_1 = img_scaled.copy()
             cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
             self._add_debug_view('find_circle.drawContours', img_1)
+
+            c = ContourSelector(img_scaled.copy(), largest_contour)
+            c.show_and_interact()
 
             # ellipse = cv2.fitEllipse(largest_contour)
             # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
