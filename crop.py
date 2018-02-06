@@ -11,13 +11,14 @@ PREVIEW_WIDTH = 500
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG, format='%(name)-12s %(levelname)-8s %(message)s')
 
-images = [
-    'test_dataset/DSC01313.jpg',
-    'test_dataset/DSC01332.jpg',
-    'test_dataset/DSC01422.jpg',
-    'test_dataset/DSC01426.jpg',
-]
-images = open('test_dataset/test_datasets_all.txt', encoding='utf-8').read().split()
+# images = [
+#     'test_dataset/DSC01313.jpg',
+#     'test_dataset/DSC01332.jpg',
+#     'test_dataset/DSC01422.jpg',
+#     'test_dataset/DSC01426.jpg',
+# ]
+# images = open('test_dataset/test_datasets_all.txt', encoding='utf-8').read().split()
+images = open('test_dataset/test_datasets_D810.txt', encoding='utf-8').read().split()
 
 padding_top = 500
 padding_bottom = 500

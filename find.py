@@ -398,17 +398,17 @@ class FindMainObject(CVPipeline):
         def morphopen(img, _kernel=43):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2), show_preview=False)
 
         # Eliminate the noise inside
         def morphclose(img, _kernel=73):
             mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
-        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2), show_preview=False)
 
         def mediumblur(img, _blur=5):
             return cv2.medianBlur(img, _blur)
-        img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2))
+        img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2), show_preview=False)
 
         # Get location
         _, contours, hierarchy = cv2.findContours(img_, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
