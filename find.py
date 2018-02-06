@@ -372,17 +372,20 @@ def draw_moon(img, moon: Circle):
     cv2.circle(img, (moon.x, moon.y), 5, (0, 0, 255), 1)
 
 
-f0 = FindMainObject()
-f1 = FindCircle()
+def find_moon(img, f0: FindMainObject, f1: FindCircle, tune=False) -> Circle:
 
+    p0 = f0.run_pipeline_final
+    p1 = f1.run_pipeline_final
+    if tune:
+        p0 = f0.run_pipeline_tuning
+        p1 = f1.run_pipeline_tuning
 
-def find_moon(img) -> Circle:
-    roi, rx, ry = f0.run_pipeline_final(img)
+    roi, rx, ry = p0(img)
     if roi is None:
         logger.error('Failed to locate a main object, aborted.')
         return None
 
-    circles = f1.run_pipeline_final(roi)
+    circles = p1(roi)
     if not circles:
         return None
 

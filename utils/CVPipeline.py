@@ -304,6 +304,7 @@ class CVPipeline:
     def run_pipeline_final(self, *inputargs):
         """Run the tuned, final pipeline. Will try to read the params from the config file"""
         self._suppress_ui = True
+        self._should_create_tuneui = False
         return self.__run(*inputargs)
 
     def __run_pipeline_update(self):
