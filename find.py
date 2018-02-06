@@ -108,14 +108,14 @@ class FindCircle(CVPipeline):
 
         def medianblur(img, _blur=19):
             return cv2.medianBlur(img, _blur)
-        img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
+        img_ = img_blur = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
 
         def canny(img, _sigma=0.33):
             return auto_canny(img, sigma=_sigma)
         img_ = self._add_tune_step(canny, img_, _sigma=(0.01, 50.0))
 
         # Create a mask to eliminate the detail of the moon surface
-        _, img_mask = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        _, img_mask = cv2.threshold(img_blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         # self._add_debug_view('otsu threshold', img_otsu)
         # Closing is Dilation followed by Erosion. It is useful in closing small holes inside the foreground objects
         def morphclose(img, _kernel=85):
@@ -129,7 +129,18 @@ class FindCircle(CVPipeline):
         img_mask = self._add_tune_step(erosionimg, img_mask, _kernel=(1, 100, 2))
 
         # Mask the canny edge, erase moon surface detail
-        # todo
+        img_ = img_ & cv2.bitwise_not(img_mask)
+        self._add_debug_view('masked canny', img_)
+
+        # Extends the mask a little bit
+        def dilationmask(img, _kernel=3):
+            k = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.dilate(img, k, iterations=1)
+        img_mask = self._add_tune_step(dilationmask, img_mask, _kernel=(1, 100, 2))
+
+        # Mask the canny edge again, hope to eliminate the edge form by shaded part (the sharp edge will be kept)
+        img_ = img_ & (img_mask)
+        self._add_debug_view('masked canny 2', img_)
 
         if False:  # Use padding
             padding = int(self.NORM_WIDTH / 20)

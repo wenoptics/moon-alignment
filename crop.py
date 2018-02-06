@@ -3,7 +3,8 @@ import logging
 import cv2
 import os
 
-from find import draw_moon, find_moon, resize, FindMainObject, FindCircle
+from find import draw_moon, find_moon, FindMainObject, FindCircle
+from utils import util
 
 PREVIEW_WIDTH = 500
 
@@ -16,7 +17,7 @@ images = [
     'test_dataset/DSC01422.jpg',
     'test_dataset/DSC01426.jpg',
 ]
-# images = open('test_dataset/test_datasets_all.txt', encoding='utf-8').read().split()
+images = open('test_dataset/test_datasets_all.txt', encoding='utf-8').read().split()
 
 padding_top = 500
 padding_bottom = 500
@@ -45,7 +46,7 @@ def interactive(img_ori, path):
     def _process_moon(moon, path):
         if not moon:
             print('moon not detected in {}, press "d" to manually tune.'.format(path))
-            cv2.imshow('ori - {}'.format(path), resize(img_ori, PREVIEW_WIDTH))
+            cv2.imshow('ori - {}'.format(path), util.resize(img_ori, PREVIEW_WIDTH))
             retkey = cv2.waitKey()
             if 'd' == chr(retkey & 255):
                 cv2.destroyAllWindows()
@@ -57,7 +58,7 @@ def interactive(img_ori, path):
         draw_moon(img_draw, moon)
 
         img_crop = crop_moon(img_ori, moon)
-        cv2.imshow('crop preview - {}'.format(path), resize(crop_moon(img_draw, moon), PREVIEW_WIDTH))
+        cv2.imshow('crop preview - {}'.format(path), util.resize(crop_moon(img_draw, moon), PREVIEW_WIDTH))
 
         while True:
             logger.info('press "y" or "n" to save or skip crop image. "d" to manually tune.')
