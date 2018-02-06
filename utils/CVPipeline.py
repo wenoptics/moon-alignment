@@ -54,31 +54,39 @@ class CVPreviewStep:
         self.frompipeline = from_pipeline
 
         self._win_x, self._win_y = None, None
+        self._has_shown = False
+
+    @property
+    def _winname(self):
+        return '[{}]{}'.format(self.stepn, self.stepname)
 
     def show(self, img):
         if self.frompipeline._suppress_ui:
             return
 
-        _winname = '[{}]{}'.format(self.stepn, self.stepname)
-
         if img is None:
             self.logger.warning('image in CVPreviewStep "%s" is None, will not show', self.stepname)
-            cv2.destroyWindow(_winname)
+            self.close_preview_window()
             return
 
         # Resize preview image
         if self.frompipeline.force_resize_preview_w > 0:
             img = resize(img, self.frompipeline.force_resize_preview_w)
-            _winname += '(resized)'
-        is_existed = isCvWindowsExists(_winname)
-        cv2.imshow(_winname, img)
+            # self._winname += '(resized)'
+        is_existed = isCvWindowsExists(self._winname)
+        cv2.imshow(self._winname, img)
+        self._has_shown = True
 
         # Arrange the window... when open many windows, it gets so messy
         if not is_existed:  # Don't arrange the window if already existed (maybe user have moved it..)
             w, h = img.shape[1], img.shape[0]
             if self._win_x is None:
-                self._win_x, self._win_y = self.frompipeline.preview_window_arranger.add_window(_winname, w, h)
-            cv2.moveWindow(_winname, self._win_x, self._win_y)
+                self._win_x, self._win_y = self.frompipeline.preview_window_arranger.add_window(self._winname, w, h)
+            cv2.moveWindow(self._winname, self._win_x, self._win_y)
+
+    def close_preview_window(self):
+        if self._has_shown:
+            cv2.destroyWindow(self._winname)
 
 
 class CVStep(CVPreviewStep):
@@ -286,6 +294,11 @@ class CVPipeline:
 
         # Block until tune window closed
         self._tk.mainloop()
+
+        # Close all cv windows
+        for step in self.steps.values():
+            step.close_preview_window()
+
         return self._retval
 
     def run_pipeline_final(self, *inputargs):
