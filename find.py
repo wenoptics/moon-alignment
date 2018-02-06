@@ -77,7 +77,11 @@ class FindCircle(CVPipeline):
         Ri_3 = calc_R([xc_3, yc_3])
         residu_3 = sum((Ri_3 - R_3) ** 2)
         residu2_3 = sum((Ri_3 ** 2 - R_3 ** 2) ** 2)
+
         print('lsc_out.sum_square = ', lsc_out.sum_square)
+        print('residu_3  :', residu_3 )
+        print('residu2_3 :', residu2_3)
+
         return xc_3, yc_3, R_3
 
     def scale_to_normal(self, img):
@@ -102,23 +106,32 @@ class FindCircle(CVPipeline):
             return cv2.bilateralFilter(img, _d, _sigmacolor, _sigmaspace)
         img_ = self._add_tune_step(biltfilter, img_, _d=(0, 30), _sigmacolor=(0, 1250), _sigmaspace=(0, 1250))
 
+        # def medianblur(img, _blur=19):
+        #     return cv2.medianBlur(img, _blur)
+        # img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
+
+        def canny(img, _sigma=0.33):
+            return auto_canny(img, sigma=_sigma)
+        img_ = self._add_tune_step(canny, img_, _sigma=(0.01, 50.0))
+
         padding = int(self.NORM_WIDTH / 20)
         img_ = img_gray = cv2.copyMakeBorder(img_, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
         img_scaled = cv2.copyMakeBorder(img_scaled, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
-        def medianblur(img, _blur=19):
-            return cv2.medianBlur(img, _blur)
-        img_ = self._add_tune_step(medianblur, img_, _blur=(1, 30, 2))
+        # _, img_otsu = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        # self._add_debug_view('otsu threshold', img_otsu)
 
-        _, img_otsu = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        self._add_debug_view('otsu threshold', img_otsu)
+        def dilationimg(img, _kernel=3):
+            k = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.dilate(img, k, iterations=1)
+        img_ = self._add_tune_step(dilationimg, img_, _kernel=(1, 100, 2))
 
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
         def morphopen(img, _kernel=3):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        img_ = self._add_tune_step(morphopen, img_otsu, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
 
         # Eliminate the noise inside
         def morphclose(img, _kernel=85):
@@ -126,31 +139,46 @@ class FindCircle(CVPipeline):
             return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
         img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
 
+        def medianblur2(img, _blur=19):
+            return cv2.medianBlur(img, _blur)
+        img_ = self._add_tune_step(medianblur2, img_, _blur=(1, 30, 2))
+
         # -----------------------------------------------------------------------------------------------------------
         # Try using contour method
 
         if self._is_tuning:
             largest_contour = find_largest_contour(img_)
-            print('largest_contour has {} points'.format(len(largest_contour)))
-            img_1 = img_scaled.copy()
-            cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
-            self._add_debug_view('drawContours', img_1)
+            if largest_contour is None:
+                print('no contour found.')
+            else:
+                print('largest_contour has {} points'.format(len(largest_contour)))
+                img_1 = img_scaled.copy()
+                cv2.drawContours(img_1, largest_contour, -1, (0, 255, 0), 2)
+                self._add_debug_view('drawContours', img_1)
 
-            c = ContourSelector(img_scaled.copy(), largest_contour)
-            c.show_and_interact()
-            arc_contour = c.get_selected()
-            cx, cy, cr = self.fit_circle(arc_contour)
+                if False:  # Select some contour manually
+                    c = ContourSelector(img_scaled.copy(), largest_contour)
+                    c.show_and_interact()
+                    arc_contour = c.get_selected()
+                    cx, cy, cr = self.fit_circle(arc_contour)
+                else:
+                    cx, cy, cr = self.fit_circle(largest_contour)
 
-            (cx, cy, cr) = np.uint16(np.around((cx, cy, cr)))
-            img_2 = img_scaled.copy()
-            cv2.circle(img_2, (cx, cy), cr, (0, 255, 0), 1)
-            cv2.circle(img_2, (cx, cy), 2, (0, 0, 255), 1)
-            self._add_debug_view('fitcircle', img_2)
+                (cx, cy, cr) = np.uint16(np.around((cx, cy, cr)))
+                img_2 = img_scaled.copy()
+                cv2.circle(img_2, (cx, cy), cr, (0, 255, 0), 1)
+                cv2.circle(img_2, (cx, cy), 2, (0, 0, 255), 1)
+                self._add_debug_view('fitcircle', img_2)
 
-            # ellipse = cv2.fitEllipse(largest_contour)
-            # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
-            # cv2.imshow('find_circle.fitEllipse', img_ellipse)
-            # print("ellipse: %s" % str(ellipse))
+                img_3 = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
+                cv2.circle(img_3, (cx, cy), cr, (0, 255, 0), 1)
+                cv2.circle(img_3, (cx, cy), 2, (0, 0, 255), 1)
+                self._add_debug_view('fitcircle vs canny', img_3)
+
+                # ellipse = cv2.fitEllipse(largest_contour)
+                # img_ellipse = cv2.ellipse(img.copy(), ellipse, (0, 255, 0), 2)
+                # cv2.imshow('find_circle.fitEllipse', img_ellipse)
+                # print("ellipse: %s" % str(ellipse))
 
         # -----------------------------------------------------------------------------------------------------------
 
