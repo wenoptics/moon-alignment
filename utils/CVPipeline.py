@@ -47,8 +47,7 @@ class CvWindowArranger:
 
 
 class CVPreviewStep:
-    def __init__(self, from_pipeline: 'CVPipeline', n: int):
-        self.stepn = n
+    def __init__(self, from_pipeline: 'CVPipeline'):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.stepname = 'cvPreviewStep1'
         self.frompipeline = from_pipeline
@@ -58,7 +57,7 @@ class CVPreviewStep:
 
     @property
     def _winname(self):
-        return '[{}]{}'.format(self.stepn, self.stepname)
+        return '{}'.format(self.stepname)
 
     def show(self, img):
         if self.frompipeline._suppress_ui:
@@ -92,8 +91,8 @@ class CVPreviewStep:
 class CVTuneStep(CVPreviewStep):
     UPDATE_AFTER_CANCEL = True
 
-    def __init__(self, from_pipeline: 'CVPipeline', n: int, handler, show_preview=True):
-        super().__init__(from_pipeline, n)
+    def __init__(self, from_pipeline: 'CVPipeline', handler, show_preview=True):
+        super().__init__(from_pipeline)
         self.valuedict = {}
         self.paramsettingdict = {}
         self.handler = handler
@@ -253,7 +252,6 @@ class CVPipeline:
         self.timesrun = 0
         self._suppress_ui = False
         self._is_tuning = False
-        self._currentstep = 0
         self.__uiprogressbar = None
         self.__should_create_tuneui = False
         self.__doaftercancel = None
@@ -327,7 +325,6 @@ class CVPipeline:
     def _pre_pipeline(self):
         if self._suppress_ui is True and self.__should_create_tuneui is True:
             raise ValueError('`_suppress_ui` and `_should_create_tuneui` should NOT be True at the same time')
-        self._currentstep = 0
         if not self._suppress_ui:
             self.__uiprogressbar['maximum'] = len(self.steps)
             self.__uiprogressbar.start()
@@ -405,7 +402,7 @@ class CVPipeline:
 
         if step is None:
             # Step not found, new one
-            step = CVTuneStep(self, self._currentstep, handler, show_preview=show_preview)
+            step = CVTuneStep(self, handler, show_preview=show_preview)
 
             def _cb():
                 # Skip blink when initializing sliders
@@ -428,24 +425,20 @@ class CVPipeline:
 
             # Save step info
             self.__add_step(handler.__name__, step)
-            self.logger.debug('step "%s"(n=%d) created', handler.__name__, self._currentstep)
-
-        assert step.stepn == self._currentstep
+            self.logger.debug('step "%s" created', handler.__name__)
 
         # Check if we have to create some ui here
         if self.__should_create_tuneui and not self._suppress_ui:
-            labelframe = tkinter.LabelFrame(self._tk, text='[{}] {}'.format(self._currentstep, handler.__name__))
+            labelframe = tkinter.LabelFrame(self._tk, text='{}'.format(handler.__name__))
             labelframe.pack(expand="yes")
             step.create_tune_trackbars(labelframe)
 
         ret = step.apply_values(*directargs)
 
         if not self._suppress_ui:
-            self.__uiprogressbar['value'] = self._currentstep + 1
-            # self._uiprogressbar.step()
+            self.__uiprogressbar.step()
             self._tk.update_idletasks()
 
-        self._currentstep += 1
         return ret
 
     def _add_debug_view(self, winname, img):
@@ -454,15 +447,13 @@ class CVPipeline:
 
         if step is None:
             # Step not found, new one
-            step = CVPreviewStep(self, self._currentstep)
+            step = CVPreviewStep(self)
             step.stepname = winname
             self.__add_step(winname, step)
         step.show(img)
         if not self._suppress_ui:
-            self.__uiprogressbar['value'] = self._currentstep + 1
-            # self._uiprogressbar.step()
+            self.__uiprogressbar.step()
             self._tk.update_idletasks()
-        self._currentstep += 1
 
 
 if __name__ == '__main__':
