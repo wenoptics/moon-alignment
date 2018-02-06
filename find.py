@@ -114,30 +114,48 @@ class FindCircle(CVPipeline):
             return auto_canny(img, sigma=_sigma)
         img_ = self._add_tune_step(canny, img_, _sigma=(0.01, 50.0))
 
-        padding = int(self.NORM_WIDTH / 20)
-        img_ = img_gray = cv2.copyMakeBorder(img_, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        img_scaled = cv2.copyMakeBorder(img_scaled, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-
-        # _, img_otsu = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        # Create a mask to eliminate the detail of the moon surface
+        _, img_mask = cv2.threshold(img_, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         # self._add_debug_view('otsu threshold', img_otsu)
+        # Closing is Dilation followed by Erosion. It is useful in closing small holes inside the foreground objects
+        def morphclose(img, _kernel=85):
+            mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
+        img_mask = self._add_tune_step(morphclose, img_mask, _kernel=(1, 100, 2))
+        # Use erosion to make the mask region smaller
+        def erosionimg(img, _kernel=3):
+            k = np.ones((_kernel, _kernel), np.uint8)
+            return cv2.erode(img, k, iterations=1)
+        img_mask = self._add_tune_step(erosionimg, img_mask, _kernel=(1, 100, 2))
 
+        # Mask the canny edge, erase moon surface detail
+        # todo
+
+        if False:  # Use padding
+            padding = int(self.NORM_WIDTH / 20)
+            img_ = img_gray = cv2.copyMakeBorder(img_, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            img_scaled = cv2.copyMakeBorder(img_scaled, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+        else:
+            padding = 0
+            img_gray = img_.copy()
+
+        # Extend the canny edge a little bit
         def dilationimg(img, _kernel=3):
             k = np.ones((_kernel, _kernel), np.uint8)
             return cv2.dilate(img, k, iterations=1)
         img_ = self._add_tune_step(dilationimg, img_, _kernel=(1, 100, 2))
 
-        # MORPH_OPEN is erosion followed by dilation,
-        #   eliminate noise outside the target
+        # MORPH_OPEN is erosion followed by dilation, eliminate noise outside the target
         def morphopen(img, _kernel=3):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
         img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
 
-        # Eliminate the noise inside
-        def morphclose(img, _kernel=85):
-            mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
-            return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
-        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
+        # # Eliminate the noise inside
+        # def morphclose(img, _kernel=85):
+        #     mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
+        #     return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
+        # img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
 
         def medianblur2(img, _blur=19):
             return cv2.medianBlur(img, _blur)
@@ -185,9 +203,7 @@ class FindCircle(CVPipeline):
         # Scale the circle back to ori size
         return ret_circle
 
-
         # -----------------------------------------------------------------------------------------------------------
-
         # img_ = cv2.addWeighted(img_gray, 0.2, img_, 0.8, 0)
         # # self._add_debug_view('addWeighted', img_)
         #
@@ -230,10 +246,11 @@ def find_largest_contour(bin_img):
     largest_contour = None
     largest_area = 0
     if len(contours) > 0:
-        logger.debug('printing area of contours in `find_largest_contour()`')
+        # logger.debug('printing area of contours in `find_largest_contour()`')
+        pass
     for i, c in enumerate(contours):
         area = cv2.contourArea(c)
-        logger.debug('\t[%d/%d] area==%s', i + 1, len(contours), area)
+        # logger.debug('\t[%d/%d] area==%s', i + 1, len(contours), area)
         if area > largest_area:
             largest_contour = c
             largest_area = area
@@ -281,30 +298,89 @@ def find_black_drop(img, remaining_percentage=0.5) -> int:
     #         return int(i + tolerance/2)
 
 
+def padding_crop(bigimg, padding, x, y, w, h):
+    """Crop the image to a roi, with some padding
+    Return the crop image and the crop rectangle
+    """
+    iw, ih = bigimg.shape[1], bigimg.shape[0]
+    # Padding if possible
+    left, right = np.uint16(np.around((max(x - padding, 0), min(iw, x + w + padding))))
+    top, bottom = np.uint16(np.around((max(y - padding, 0), min(ih, y + h + padding))))
+
+    return bigimg[top:bottom, left: right], (left, top, right-left, bottom-top)
+
+
 class FindMainObject(CVPipeline):
     def _pipeline(self, *inputargs):
         img = inputargs[0]
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # For comparision
-        # Find a suitable threshold from histogram
-        def auto_threshold(img, _percent=0.05):
-            majorblack = find_black_drop(img, _percent)
-            self.logger.debug('majorblack==%d', majorblack)
-            _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
-            return gray_img
-        self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
+        # # For comparision
+        # # Find a suitable threshold from histogram
+        # def auto_threshold(img, _percent=0.05):
+        #     majorblack = find_black_drop(img, _percent)
+        #     self.logger.debug('majorblack==%d', majorblack)
+        #     _, gray_img = cv2.threshold(img, majorblack, 255, cv2.THRESH_BINARY)
+        #     return gray_img
+        # self._add_tune_step(auto_threshold, img_gray, _percent=(0.001, 0.6))
 
-        # For comparision
-        def threshold_bin(img, _threshold=10):
-            ret, retimg = cv2.threshold(img, _threshold, 255, cv2.THRESH_BINARY)
-            return retimg
-        self._add_tune_step(threshold_bin, img_gray, _threshold=(0, 255))
+        def automain(img, _iteration=3, _kernelclose=17, _kernelopen=3):
+            global gx, gy, gw, gh
+            gx, gy, gw, gh = 0, 0, 0, 0
 
-        # Auto threshold using Otsu threshold
-        tval, img_ = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        self.logger.info('value using using Otsu threshold == %d', tval)
-        self._add_debug_view('otsu threshold', img_)
+            def run_(img):
+                thr, bin_img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+
+                mopen_kernel = np.ones((_kernelopen, _kernelopen), np.uint8)
+                bin_img = cv2.morphologyEx(bin_img, cv2.MORPH_OPEN, mopen_kernel)
+
+                mclose_kernel = np.ones((_kernelclose, _kernelclose), np.uint8)
+                bin_img = cv2.morphologyEx(bin_img, cv2.MORPH_CLOSE, mclose_kernel)
+
+                _, contours, hierarchy = cv2.findContours(bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                largest_contour = find_largest_contour(bin_img)
+                x_, y_, w_, h_ = cv2.boundingRect(largest_contour)
+                if w_ == 0 or h_ == 0:
+                    return None
+
+                # Padding if possible
+                p = (h_ + w_) / 2 * 0.1  # 10% of avg
+                img_crop, (rx, ry, rw, rh) = padding_crop(img, p, x_, y_, w_, h_)
+
+                self.logger.debug('cropping to x=%d y=%d w=%d h=%d, current threshold=%d', rx, ry, rw, rh, thr)
+
+                global gx, gy, gw, gh
+                gx, gy, gw, gh = gx+rx, gy+ry, rw, rh
+
+                return img_crop
+
+            for i in range(_iteration):
+                last_img = img
+                img = run_(img)
+                if img is None:
+                    self.logger.debug('_iteration break at %d', i)
+                    return last_img, (gx, gy, gw, gh)
+
+            _, bin_img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            return bin_img, (gx, gy, gw, gh)
+
+        img_, (mx, my, mw, mh) = self._add_tune_step(automain, img_gray,
+                                              _iteration=(0, 10), _kernelclose=(1, 100, 2), _kernelopen=(1, 100, 2))
+        if mw == 0 or mh == 0:
+            self.logger.warning('failed in automain')
+            return None, (0, 0)
+
+        # # For comparision
+        # def threshold_bin(img, _threshold=45):
+        #     ret, retimg = cv2.threshold(img, _threshold, 255, cv2.THRESH_BINARY)
+        #     return retimg
+        # self._add_tune_step(threshold_bin, img_, _threshold=(0, 255))
+
+        # # For comparision
+        # def adpthreshold(img, _blocksize=11, _c=2):
+        #     return cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        #                                  cv2.THRESH_BINARY, _blocksize, _c)
+        # self._add_tune_step(adpthreshold, img_gray, _blocksize=(1, 1000, 2), _c=(0, 50))
 
         # MORPH_OPEN is erosion followed by dilation,
         #   eliminate noise outside the target
@@ -323,33 +399,31 @@ class FindMainObject(CVPipeline):
             return cv2.medianBlur(img, _blur)
         img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2))
 
+        # Get location
         _, contours, hierarchy = cv2.findContours(img_, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         largest_contour = find_largest_contour(img_)
         x_, y_, w_, h_ = cv2.boundingRect(largest_contour)
         if w_ == 0 or h_ == 0:
-            self.logger.warning('find boundingRect failed: w=%d, h=%d', w_, h_)
-            return None, None, None
+            self.logger.warning('failed to find boundingRect: w=%d, h=%d', w_, h_)
+            return None, (0, 0)
 
-        # img_1 = img.copy()
-        # cv2.drawContours(img_1, contours, -1, (0, 255, 0), 3)
-        # self._add_debug_view('find_main_object.drawContours', img_1[y_:y_ + h_, x_:x_ + w_])
-        #
-        # img_2 = img.copy()
-        # ellipse = cv2.fitEllipse(largest_contour)
-        # img_2 = cv2.ellipse(img_2, ellipse, (0, 255, 0), 3)
-        # self._add_debug_view('find_main_object.fitEllipse', img_2[y_:y_ + h_, x_:x_ + w_])
+        # Offset the 1st crop
+        x_ += mx
+        y_ += my
 
-        roi = img[y_:y_ + h_, x_:x_ + w_]
-        self._add_debug_view('roi', roi)
+        # Padding and crop the roi
+        padding = (w_ + h_)/2 * 0.1  # padding %10 of avg
+        img_roi, (x, y, w, h) = padding_crop(img, padding, x_, y_, w_, h_)
+        self._add_debug_view('main object roi', img_roi)
 
-        self.logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x_, y_, w_, h_))
-        return roi, x_, y_
+        self.logger.debug('main_object roi x={}, y={}, w={}, h={}'.format(x, y, w, h))
+        return img_roi, (x, y)
 
 
 def draw_moon(img, moon: Circle):
     cv2.circle(img, (moon.x, moon.y), moon.r, (0, 255, 0), 2)
     # draw the center of the moon
-    cv2.circle(img, (moon.x, moon.y), 5, (0, 0, 255), 1)
+    cv2.circle(img, (moon.x, moon.y), 5, (255, 0, 255), 1)
 
 
 def find_moon(img, f0: FindMainObject, f1: FindCircle, tune=False) -> Circle:
@@ -359,7 +433,7 @@ def find_moon(img, f0: FindMainObject, f1: FindCircle, tune=False) -> Circle:
         p0 = f0.run_pipeline_tuning
         p1 = f1.run_pipeline_tuning
 
-    roi, rx, ry = p0(img)
+    roi, (rx, ry) = p0(img)
     if roi is None:
         logger.error('Failed to locate a main object, aborted.')
         return None

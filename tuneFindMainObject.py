@@ -12,12 +12,12 @@ if __name__ == '__main__':
         # 'test_dataset/DSC01332.jpg'
         # 'test_dataset/DSC01422.jpg'
         # 'test_dataset/DSC01426.jpg'
-        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01364.jpg'
+        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01364.jpg'
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01434.jpg'
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01325.jpg'
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01367.jpg'
         # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01332.jpg'
-        'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01425.jpg'
+        # 'E:\\tmp\\Eclipse-20180131\\chosen\\moon\\output\\JPEG\\DSC01425.jpg'
     )
 
     # ori_img = cv2.resize(ori_img, (0, 0), fx=0.2, fy=0.2)
