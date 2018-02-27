@@ -24,7 +24,7 @@ padding_top = 500
 padding_bottom = 500
 padding_left = 700
 padding_right = 700
-save_cropped_folder = './'
+save_cropped_folder = 'test_dataset/aligned/'
 
 
 def crop_moon(img, moon):
@@ -40,8 +40,8 @@ f1 = FindCircle()
 
 def interactive(img_ori, path):
     def _manually_tune():
-        f0.force_resize_preview_w = 500
-        f1.force_resize_preview_w = 400
+        f0.force_resize_preview_w = 300
+        f1.force_resize_preview_w = 200
         return find_moon(img_ori, f0, f1, tune=True)
 
     def _process_moon(moon, path):

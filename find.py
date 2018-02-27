@@ -45,6 +45,13 @@ class FindCircle(CVPipeline):
 
     @staticmethod
     def fit_circle(arc_contour):
+        """
+        Fit the circle with feeding points
+
+        Algorithm from scipy-cookbook: http://scipy-cookbook.readthedocs.io/items/Least_Squares_Circle.html
+        :param arc_contour:
+        :return: (x, y, r)
+        """
         from scipy import odr
 
         x = np.array([i[0][0] for i in arc_contour])
@@ -74,13 +81,13 @@ class FindCircle(CVPipeline):
         lsc_out = lsc_odr.run()
 
         xc_3, yc_3, R_3 = lsc_out.beta
-        Ri_3 = calc_R([xc_3, yc_3])
-        residu_3 = sum((Ri_3 - R_3) ** 2)
-        residu2_3 = sum((Ri_3 ** 2 - R_3 ** 2) ** 2)
-
         print('lsc_out.sum_square = ', lsc_out.sum_square)
-        print('residu_3  :', residu_3 )
-        print('residu2_3 :', residu2_3)
+
+        # Ri_3 = calc_R([xc_3, yc_3])
+        # residu_3 = sum((Ri_3 - R_3) ** 2)
+        # residu2_3 = sum((Ri_3 ** 2 - R_3 ** 2) ** 2)
+        # print('residu_3  :', residu_3 )
+        # print('residu2_3 :', residu2_3)
 
         return xc_3, yc_3, R_3
 
@@ -160,7 +167,7 @@ class FindCircle(CVPipeline):
         def morphopen(img, _kernel=3):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
+        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2), show_preview=False)
 
         # # Eliminate the noise inside
         # def morphclose(img, _kernel=85):
@@ -170,7 +177,7 @@ class FindCircle(CVPipeline):
 
         def medianblur2(img, _blur=19):
             return cv2.medianBlur(img, _blur)
-        img_ = self._add_tune_step(medianblur2, img_, _blur=(1, 30, 2))
+        img_ = self._add_tune_step(medianblur2, img_, _blur=(1, 30, 2), show_preview=False)
 
         # -----------------------------------------------------------------------------------------------------------
         # Try using contour method
@@ -398,17 +405,17 @@ class FindMainObject(CVPipeline):
         def morphopen(img, _kernel=43):
             mopen_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_OPEN, mopen_kernel)
-        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2), show_preview=False)
+        img_ = self._add_tune_step(morphopen, img_, _kernel=(1, 100, 2))
 
         # Eliminate the noise inside
         def morphclose(img, _kernel=73):
             mclose_kernel = np.ones((_kernel, _kernel), np.uint8)
             return cv2.morphologyEx(img, cv2.MORPH_CLOSE, mclose_kernel)
-        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2), show_preview=False)
+        img_ = self._add_tune_step(morphclose, img_, _kernel=(1, 100, 2))
 
         def mediumblur(img, _blur=5):
             return cv2.medianBlur(img, _blur)
-        img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2), show_preview=False)
+        img_ = self._add_tune_step(mediumblur, img_, _blur=(1, 30, 2))
 
         # Get location
         _, contours, hierarchy = cv2.findContours(img_, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
